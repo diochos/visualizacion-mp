@@ -42,38 +42,115 @@
         Aquí se muestra la tabla completa de datos procesados del archivo cargado.
       </p>
 
-      <!-- Tabla completa -->
-      <div style="overflow-x:auto; max-height:70vh;">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>CodigoMP</th>
-              <th>Materia Prima</th>
-              <th>Línea</th>
-              <th>Código de artículo</th>
-              <th>Nombre de artículo</th>
-              <th>Fecha</th>
-              <th>Producción</th>
-              <th>Cantidad Teórica</th>
-              <th>Cantidad Real</th>
-              <th>Merma</th>
-              <th>Costo Merma</th>
-              <th>% Rendimiento</th>
-              <th>% Merma</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td colspan="14" class="muted">Cargue un archivo para ver datos…</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <!-- Controles superiores -->
+<div class="table-controls top">
+  <div id="dt-length"></div>
+  <div id="dt-filter"></div>
+</div>
+
+<!-- Tabla completa (sin scroll interno) -->
+<div style="overflow-x:auto;">
+  <table class="table" id="tablaMP">
+    <thead>
+      <tr>
+        <th>CodigoMP</th>
+        <th>Materia Prima</th>
+        <th>Línea</th>
+        <th>Código de artículo</th>
+        <th>Nombre de artículo</th>
+        <th>Fecha</th>
+        <th>Producción</th>
+        <th>Cantidad Teórica</th>
+        <th>Cantidad Real</th>
+        <th>Merma</th>
+        <th>Costo Merma</th>
+        <th>% Rendimiento</th>
+        <th>% Merma</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="13" class="muted">Cargue un archivo para ver datos…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Controles inferiores -->
+<div class="table-controls bottom">
+  <div id="dt-info"></div>
+  <div id="dt-pager"></div>
+</div>
+
+      
     </section>
     </div>
 
-    <!-- Librería SheetJS -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- Tu script -->
-    <script src="procesamientoDatos.js"></script>
+    <!-- jQuery (necesario para DataTables) -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- DataTables -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const $tbody = document.querySelector("#tablaMP tbody");
+    $tbody.innerHTML = `<tr><td colspan="13" class="muted">Cargue un archivo para ver datos…</td></tr>`;
+
+    const observer = new MutationObserver(() => {
+      if ($.fn.dataTable.isDataTable("#tablaMP")) return;
+      const dt = $("#tablaMP").DataTable({
+        pageLength: 25,
+        autoWidth: false,
+        ordering: true,
+        order: [[5, "asc"]],          // columna 5 = Fecha (usa data-order=YYYY-MM-DD)
+        language: { url: "https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-MX.json" },
+        // mantenemos el DOM estándar y luego reubicamos
+        dom: "lfrtip",
+        columnDefs: [
+          { targets: [7,8,9,10,11,12], className: "dt-right" },
+          { targets: [5], className: "dt-center" }
+        ],
+        initComplete: function(){
+          const $wrap = $(this.api().table().container());
+          // Mover controles a nuestros contenedores
+          $wrap.find("div.dataTables_length").appendTo("#dt-length");
+          $wrap.find("div.dataTables_filter").appendTo("#dt-filter");
+          $wrap.find("div.dataTables_info").appendTo("#dt-info");
+          $wrap.find("div.dataTables_paginate").appendTo("#dt-pager");
+        }
+      });
+    });
+    observer.observe($tbody, { childList: true });
+  });
+</script>
+
+
+
+      <!-- Librería SheetJS -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Tu script -->
+  <script src="procesamientoDatos.js"></script>
+
+  <!-- Overlay de carga -->
+  <div id="loader" style="
+    position: fixed; inset: 0; display: none; place-items: center;
+    background: rgba(0,0,0,.55); backdrop-filter: blur(2px); z-index: 9999;
+    font-family: Montserrat, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  ">
+    <div style="
+      background: #1A1A1D; color: #F5F5F7; border:1px solid #2A2A2F;
+      padding: 18px 20px; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+      display:flex; align-items:center; gap:12px;
+    ">
+      <svg width="22" height="22" viewBox="0 0 24 24" style="animation:spin 1s linear infinite">
+        <circle cx="12" cy="12" r="10" stroke="#FF6D00" stroke-width="3" fill="none" opacity=".25"/>
+        <path d="M22 12a10 10 0 0 1-10 10" stroke="#FF6D00" stroke-width="3" fill="none"/>
+      </svg>
+      <strong>Cargando archivo…</strong>
+    </div>
+  </div>
+  <style>
+    @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  </style>
   </body>
 
   </div>
