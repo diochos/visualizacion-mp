@@ -1,0 +1,249 @@
+/* =========================
+   Visualización MP – Estilos globales
+   Tipografía: Montserrat (400/500/600/700)
+   Paleta Bepensa: naranja/negro/blanco + grises
+   ========================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+:root{
+  /* Paleta corporativa */
+  --c-bg: #0E0E10;          /* fondo general casi negro */
+  --c-panel: #1A1A1D;       /* panel/targeta */
+  --c-panel-2: #202024;     /* panel alterno */
+  --c-text: #F5F5F7;        /* texto principal */
+  --c-text-dim: #B8B8BF;    /* texto atenuado */
+  --c-brand: #FF6D00;       /* naranja Bepensa */
+  --c-brand-700: #E85F00;   /* hover */
+  --c-brand-300: #FFA366;   /* acentos suaves */
+  --c-border: #2A2A2F;      /* bordes sutiles */
+  --c-ok: #23C55E;          /* verdes para positivos */
+  --c-warn: #F59E0B;        /* amarillos para alertas */
+  --c-bad: #EF4444;         /* rojos para errores */
+
+  /* Layout */
+  --radius-xl: 18px;
+  --radius-lg: 12px;
+  --radius-md: 10px;
+  --shadow-1: 0 8px 24px rgba(0,0,0,.25);
+  --gap: 16px;
+  --maxw: 1200px;
+
+  /* Tipografía */
+  --f-base: 'Montserrat', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  --fs-xxl: clamp(28px, 3vw, 36px);
+  --fs-xl: 20px;
+  --fs-lg: 16px;
+  --fs-md: 14px;
+  --fs-sm: 12px;
+
+  /* Colores sugeridos para gráficas (orden de series) */
+  --ch-1: #FF6D00; /* naranja principal */
+  --ch-2: #6B7280; /* gris */
+  --ch-3: #10B981; /* verde */
+  --ch-4: #3B82F6; /* azul */
+  --ch-5: #F59E0B; /* ámbar */
+  --ch-6: #8B5CF6; /* violeta */
+  --ch-7: #EF4444; /* rojo */
+  --ch-8: #14B8A6; /* teal */
+}
+
+* { box-sizing: border-box; }
+html, body {
+  height: 100%;
+  background: radial-gradient(1200px 800px at 10% -10%, #151518 20%, transparent 60%) no-repeat,
+              radial-gradient(900px 600px at 110% 20%, #18181b 10%, transparent 55%) no-repeat,
+              var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--f-base);
+  line-height: 1.45;
+}
+a { color: var(--c-brand); text-decoration: none; }
+a:hover { color: var(--c-brand-300); }
+img { max-width: 100%; display: block; }
+
+.container {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  margin-bottom: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand__logo {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--c-brand) 0%, var(--c-brand-700) 100%);
+  box-shadow: 0 6px 18px rgba(255,109,0,.35);
+}
+.brand__title {
+  font-size: var(--fs-xxl);
+  font-weight: 700;
+  letter-spacing: .3px;
+}
+
+.tag {
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  padding: 6px 10px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Selector de archivo (bonito) */
+.file {
+  position: relative;
+}
+.file input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.file__btn {
+  background: var(--c-brand);
+  color: #fff;
+  border: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(255,109,0,.25);
+  transition: transform .08s ease, background .15s ease;
+}
+.file__btn:active { transform: translateY(1px); }
+.file__hint {
+  font-size: var(--fs-md);
+  color: var(--c-text-dim);
+}
+
+/* Tabs */
+.tabs {
+  margin-top: 14px;
+  border-bottom: 1px solid var(--c-border);
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.tab {
+  appearance: none;
+  border: 1px solid var(--c-border);
+  border-bottom: none;
+  background: var(--c-panel);
+  color: var(--c-text-dim);
+  padding: 10px 14px;
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: var(--fs-md);
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.tab:hover { color: var(--c-text); }
+.tab--active {
+  background: linear-gradient(180deg, #232326 0%, #1B1B1E 100%);
+  color: var(--c-text);
+  border-color: #34343a;
+  position: relative;
+}
+.tab--active::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--c-brand);
+}
+
+/* Paneles */
+.panel {
+  background: var(--c-panel);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-xl);
+  padding: 18px;
+  box-shadow: var(--shadow-1);
+  margin-top: 18px;
+}
+
+.panel--ghost {
+  background: transparent;
+  border-style: dashed;
+}
+
+/* Grid utilitario */
+.grid { display: grid; gap: var(--gap); }
+.grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px){
+  .grid--2, .grid--3 { grid-template-columns: 1fr; }
+}
+
+/* Tarjeta KPI */
+.kpi {
+  background: var(--c-panel-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+}
+.kpi__label { font-size: var(--fs-md); color: var(--c-text-dim); }
+.kpi__value { font-size: var(--fs-xl); font-weight: 700; }
+
+/* Tabla base */
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--c-border);
+}
+.table th, .table td {
+  padding: 12px 14px;
+  font-size: var(--fs-md);
+  border-bottom: 1px solid var(--c-border);
+}
+.table thead th {
+  background: #232327;
+  text-align: left;
+  font-weight: 700;
+}
+.table tbody tr:hover { background: rgba(255,255,255,.02); }
+
+/* Botones secundarios */
+.btn {
+  appearance: none;
+  background: transparent;
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+}
+.btn:hover { border-color: #3a3a42; }
+
+/* Helpers */
+.muted { color: var(--c-text-dim); }
+.hidden { display: none !important; }
+
+/* Placeholder de gráficos */
+.chart-placeholder {
+  height: 340px;
+  border: 1px dashed var(--c-border);
+  border-radius: var(--radius-lg);
+  display: grid;
+  place-items: center;
+  color: var(--c-text-dim);
+  font-size: var(--fs-md);
+}
