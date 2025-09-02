@@ -53,6 +53,7 @@
   <table class="table" id="tablaMP">
     <thead>
       <tr>
+        
         <th>CodigoMP</th>
         <th>Materia Prima</th>
         <th>Línea</th>
@@ -66,11 +67,15 @@
         <th>Costo Merma</th>
         <th>% Rendimiento</th>
         <th>% Merma</th>
+        <th>Categoría MP</th>       <!-- NUEVO -->
+        <th>Subcategoría MP</th>  
+            <!-- NUEVO -->
       </tr>
     </thead>
     <tbody>
-      <tr><td colspan="13" class="muted">Cargue un archivo para ver datos…</td></tr>
+      <tr><td colspan="15" class="muted">Cargue un archivo para ver datos…</td></tr>
     </tbody>
+
   </table>
 </div>
 
@@ -91,36 +96,34 @@
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const $tbody = document.querySelector("#tablaMP tbody");
-    $tbody.innerHTML = `<tr><td colspan="13" class="muted">Cargue un archivo para ver datos…</td></tr>`;
-
-    const observer = new MutationObserver(() => {
-      if ($.fn.dataTable.isDataTable("#tablaMP")) return;
-      const dt = $("#tablaMP").DataTable({
-        pageLength: 25,
-        autoWidth: false,
-        ordering: true,
-        order: [[5, "asc"]],          // columna 5 = Fecha (usa data-order=YYYY-MM-DD)
-        language: { url: "https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-MX.json" },
-        // mantenemos el DOM estándar y luego reubicamos
-        dom: "lfrtip",
-        columnDefs: [
-          { targets: [7,8,9,10,11,12], className: "dt-right" },
-          { targets: [5], className: "dt-center" }
-        ],
-        initComplete: function(){
-          const $wrap = $(this.api().table().container());
-          // Mover controles a nuestros contenedores
-          $wrap.find("div.dataTables_length").appendTo("#dt-length");
-          $wrap.find("div.dataTables_filter").appendTo("#dt-filter");
-          $wrap.find("div.dataTables_info").appendTo("#dt-info");
-          $wrap.find("div.dataTables_paginate").appendTo("#dt-pager");
+          // --- NUEVO: inicializador perezoso de DataTables ---
+      function ensureDataTable() {
+        if ($.fn.dataTable.isDataTable("#tablaMP")) {
+          // si ya existe, solo ajusta y redibuja
+          $("#tablaMP").DataTable().columns.adjust().draw(false);
+          return;
         }
-      });
-    });
-    observer.observe($tbody, { childList: true });
-  });
+        $("#tablaMP").DataTable({
+          pageLength: 25,
+          autoWidth: false,
+          ordering: true,
+          order: [[5, "asc"]], // Fecha
+          language: { url: "https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-MX.json" },
+          dom: "lfrtip",
+          columnDefs: [
+            { targets: [7,8,9,10,11,12], className: "dt-right" }, // numéricos
+            { targets: [5], className: "dt-center" }              // fecha
+          ],
+          initComplete: function(){
+            const $wrap = $(this.api().table().container());
+            $wrap.find("div.dataTables_length").appendTo("#dt-length");
+            $wrap.find("div.dataTables_filter").appendTo("#dt-filter");
+            $wrap.find("div.dataTables_info").appendTo("#dt-info");
+            $wrap.find("div.dataTables_paginate").appendTo("#dt-pager");
+          }
+        });
+      }
+
 </script>
 
 
@@ -128,7 +131,8 @@
       <!-- Librería SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Tu script -->
-  <script src="procesamientoDatos.js"></script>
+  <script src="procesamientoDatos.js?v=3"></script>
+
 
   <!-- Overlay de carga -->
   <div id="loader" style="
