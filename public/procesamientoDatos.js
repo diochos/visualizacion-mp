@@ -16,15 +16,15 @@ const CATS = [
   { name: "Concentrados / Jarabes", re: /\bjarab|concentrad/ },
   { name: "Etiquetas",  re: /\betiqu/ },
   { name: "Tapas Metálicas (Hermetapas)", re: /(hermetapa|pry[ -]?off|tapon\s*corona|chapa\b)/ },
-  { name: "Películas / Films (Emplaye / Termoencogible / Stretch)", re: /(pelicul|sleeve|termoencog|stretch\s*film|emplaye|x\s*pack)/ },
+  { name: "Emplaye / Termoencogible (kg)", re: /(pelicul|sleeve|termoencog|stretch\s*film|emplaye|x\s*pack)/ },
   { name: "Preformas PET", re: /\bpreform|prefo\b/ },
   { name: "Resinas PET", re: /\bresin|pcr001|mb\+?912|recuperad/ },
   { name: "Separadores / Cartón", re: /(separador|carton|corrugad|charola|bandeja|division)/ },
-  { name: "Taparroscas", re: /(taparrosc|twist\s*off\s*metalica|cap\b)/ },
+  { name: "Taparroscas (pzas)", re: /(taparrosc|twist\s*off\s*metalica|cap\b)/ },
 ];
 
 const SUBCATS = {
-  "Películas / Films (Emplaye / Termoencogible / Stretch)": [
+  "Emplaye / Termoencogible (kg)": [
     { name: "Termoencogible", re: /(termoencog|sleeve)/ },
     { name: "Stretch Film / Emplaye", re: /(stretch\s*film|emplaye|x\s*pack)/ },
   ],
@@ -32,7 +32,7 @@ const SUBCATS = {
     { name: "Jarabe", re: /\bjarab/ },
     { name: "Concentrado", re: /concentrad/ },
   ],
-  "Taparroscas": [
+  "Taparroscas (pzas)": [
     { name: "Rosca 1810", re: /\b1810\b/ },
     { name: "Rosca 1873", re: /\b1873\b/ },
     { name: "26 mm (2622/AP)", re: /\b26(\s*mm)?\b|\b2622\b|\bap\b/ },
@@ -122,7 +122,6 @@ async function loadSessionCompressed(){
     const meta = sessionStorage.getItem(SKEY_META);
     const data = sessionStorage.getItem(SKEY_ROWS);
     if (!meta || !data) {
-      // fallback para sesiones viejas sin compresión
       const legacy = sessionStorage.getItem("vmpsession_v1");
       if (!legacy) return null;
       return JSON.parse(legacy);
@@ -143,15 +142,50 @@ async function ensureXLSX(){
     sc.onload = res; sc.onerror = rej; document.head.appendChild(sc);
   });
 }
-function formatExcelDate(val){
-  if (typeof val === "number") {
-    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
-    return d.toLocaleDateString("es-MX");
+
+// === Fechas seguras en UTC ===
+function excelSerialToISO(val){
+  // Devuelve YYYY-MM-DD en UTC a partir de serial Excel, Date o string
+  // 1899-12-30 corrige el bug de Excel 1900
+  if (typeof val === "number" && Number.isFinite(val)) {
+    const baseUTC = Date.UTC(1899, 11, 30);
+    const ms = baseUTC + Math.round(val) * 86400000;
+    return new Date(ms).toISOString().slice(0,10);
   }
-  if (val instanceof Date) return val.toLocaleDateString("es-MX");
-  if (typeof val === "string") return val.includes("00:00:00") ? val.split(" ")[0] : val;
+  if (val instanceof Date) {
+    const d = new Date(Date.UTC(val.getFullYear(), val.getMonth(), val.getDate()));
+    return d.toISOString().slice(0,10);
+  }
+  if (typeof val === "string") {
+    const s = val.trim();
+    // YYYY-MM-DD
+    let m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (m) {
+      const y=+m[1], mo=+m[2], d=+m[3];
+      if (y>1900 && mo>=1 && mo<=12 && d>=1 && d<=31)
+        return new Date(Date.UTC(y, mo-1, d)).toISOString().slice(0,10);
+    }
+    // DD/MM/YYYY o DD-MM-YYYY (MX primero)
+    m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if (m) {
+      let d=+m[1], mo=+m[2], y=+m[3]; if (y<100) y += 2000;
+      if (y>1900 && mo>=1 && mo<=12 && d>=1 && d<=31)
+        return new Date(Date.UTC(y, mo-1, d)).toISOString().slice(0,10);
+    }
+    // “YYYY-MM-DD HH:mm:ss” u otros
+    const d = new Date(s);
+    if (!isNaN(d)) return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString().slice(0,10);
+    return "";
+  }
   return "";
 }
+
+function isoToHumanMX(iso){
+  if (!iso) return "";
+  const [y,m,d] = iso.split("-");
+  return `${d.padStart(2,"0")}/${m.padStart(2,"0")}/${y}`;
+}
+
 async function parseArrayBufferToRows(ab){
   await ensureXLSX();
   const wb = XLSX.read(ab, { type:"array" });
@@ -206,22 +240,29 @@ async function parseArrayBufferToRows(ab){
     const [codigoMP, materiaPrima] = splitOnce(articuloDesc);
     const [codArticulo, nombreArt] = splitOnce(codNombre);
 
+    // ✅ calcular ISO (UTC) ANTES de armar la fila
+    const ISO = excelSerialToISO(fecha);
+
     out.push(attachCategoriaColumns({
       CodigoMP: codigoMP || "",
       MateriaPrima: materiaPrima || "",
       Linea: recurso || "",
       CodigoArticulo: codArticulo || "",
       NombreArticulo: nombreArt || "",
-      Fecha: formatExcelDate(fecha),
+      FechaISO: ISO,
+      Fecha: isoToHumanMX(ISO),
       Produccion: String(produccion || ""),
       CantidadTeorica: cantTeor,
-      CantidadReal: cantReal,          // también cubre "Cantidad Real Total"
+      CantidadReal: cantReal,
       Merma: merma,
       CostoMerma: costoMerma,
       RendPct:  cantReal > 0 ? (cantTeor / cantReal) * 100 : 0,
       MermaPct: cantReal > 0 ? (merma   / cantReal) * 100 : 0,
     }));
   }
+
+  // Ordena por fecha (más antigua → reciente) desde el parser
+  out.sort((a,b)=> (a.FechaISO||"") < (b.FechaISO||"") ? -1 : ((a.FechaISO||"") > (b.FechaISO||"") ? 1 : 0));
   return out;
 }
 
@@ -229,12 +270,20 @@ async function parseArrayBufferToRows(ab){
 function renderRowsInTable(rows){
   const tbody = document.querySelector("#tablaMP tbody") || document.querySelector("table tbody");
   if(!tbody) return;
+
+  // Si ya hay DataTable, destruir antes de reinyectar
+  if (window.jQuery && $.fn.dataTable && $.fn.dataTable.isDataTable("#tablaMP")) {
+    $("#tablaMP").DataTable().destroy();
+  }
+
   tbody.innerHTML = "";
 
   if(!rows || rows.length === 0){
     tbody.innerHTML = `<tr><td colspan="15" class="muted">Cargue un archivo para ver datos…</td></tr>`;
+    window.ensureDataTable && window.ensureDataTable();
     return;
   }
+
   const frag = document.createDocumentFragment();
   for(const r of rows){
     const tr = document.createElement("tr");
@@ -244,7 +293,7 @@ function renderRowsInTable(rows){
       <td>${r.Linea ?? ""}</td>
       <td>${r.CodigoArticulo ?? ""}</td>
       <td>${r.NombreArticulo ?? ""}</td>
-      <td>${r.Fecha ?? ""}</td>
+      <td data-order="${r.FechaISO || ""}">${r.Fecha || ""}</td>
       <td style="text-align:right">${(r.Produccion ?? 0).toLocaleString("es-MX")}</td>
       <td style="text-align:right">${(r.CantidadTeorica ?? 0).toLocaleString("es-MX")}</td>
       <td style="text-align:right">${(r.CantidadReal ?? 0).toLocaleString("es-MX")}</td>
@@ -258,6 +307,9 @@ function renderRowsInTable(rows){
     frag.appendChild(tr);
   }
   tbody.appendChild(frag);
+
+  // Inicia/ajusta DataTables con paginación y orden asc por Fecha
+  window.ensureDataTable && window.ensureDataTable();
 }
 
 // ========= UI principal =========
@@ -267,22 +319,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loader     = document.getElementById("loader");
   const showLoader = (on) => { if (loader) loader.style.display = on ? "grid" : "none"; };
 
-  // Restaurar sesión (comprimida) y pintar si existe
+  // Restaurar sesión comprimida
   const sess = await loadSessionCompressed();
   if (sess && Array.isArray(sess.rows)) {
     if (estadoTag) estadoTag.textContent = sess.filename || "Sesión restaurada";
-    renderRowsInTable(sess.rows);
+    // Asegura orden por fecha
+    const rows = sess.rows.slice().sort((a,b)=> (a.FechaISO||"") < (b.FechaISO||"") ? -1 : ((a.FechaISO||"") > (b.FechaISO||"") ? 1 : 0));
+    renderRowsInTable(rows);
   }
 
-  // Carga por input: procesa + guarda comprimido + pinta
+  // Carga por input: procesa + guarda + pinta
   fileInput?.addEventListener("change", async (ev) => {
     const f = ev.target.files?.[0];
     if (!f) return;
     try{
       showLoader(true);
-      const ab = await f.arrayBuffer();
+      const ab   = await f.arrayBuffer();
       const rows = await parseArrayBufferToRows(ab);
-      await saveSessionCompressed(f.name, rows);      // << guarda comprimido
+      // guarda comprimido y actualiza estado
+      await saveSessionCompressed(f.name, rows);
       if (estadoTag) estadoTag.textContent = f.name;
       renderRowsInTable(rows);
     }catch(e){

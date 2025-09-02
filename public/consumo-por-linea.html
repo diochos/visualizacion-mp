@@ -7,6 +7,14 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- Loader global de página -->
+<div id="pageLoader" role="status" aria-live="polite">
+  <div class="pageLoader__box">
+    <div class="pageLoader__spinner" aria-hidden="true"></div>
+    <strong>Cargando…</strong>
+  </div>
+</div>
+
 <div class="container">
 
   <!-- Header -->
@@ -51,11 +59,29 @@
       </div>
     </div>
 
-    <!-- Timeline de meses -->
+        <!-- Periodo -->
     <div class="panel panel--ghost" style="margin-top:16px">
       <div class="muted" style="margin-bottom:8px;">Periodo</div>
-      <div id="timeline" class="topbar" style="flex-wrap:nowrap; overflow:auto; gap:8px"></div>
+
+      <!-- Botones de mes (se llenan en JS) -->
+      <div id="monthButtons" class="topbar" style="gap:8px; flex-wrap:wrap"></div>
+      <!-- Overlay local de periodo -->
+      <div id="periodOverlay" class="period-overlay hidden">
+        <span class="spinner" aria-hidden="true"></span>
+        <span style="margin-left:8px">Cargando fechas…</span>
+      </div>
+
+      <!-- Rango personalizado (se muestra solo si eliges "Personalizado") -->
+      <div id="customRange" class="topbar" style="gap:8px; flex-wrap:wrap; display:none; margin-top:8px;">
+        <label class="muted" for="dateStart">Inicio</label>
+        <input id="dateStart" type="date" class="btn" />
+        <label class="muted" for="dateEnd">Fin</label>
+        <input id="dateEnd" type="date" class="btn" />
+        <button id="btnApplyRange" class="btn" type="button">Aplicar</button>
+        <button id="btnClearRange" class="btn btn--ghost" type="button">Limpiar</button>
+      </div>
     </div>
+
 
     <!-- KPIs -->
     <div class="grid grid--3" style="margin-top:10px">
@@ -105,6 +131,13 @@
 <script src="procesamientoDatos.js?v=3"></script>
 
 <!-- Lógica específica de esta vista -->
+
 <script src="consumo-por-linea.js?v=1"></script>
+
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script src="graficas.js"></script>
+
+
 </body>
 </html>
