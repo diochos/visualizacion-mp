@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Visualización MP — Consumo por línea</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">
+      <div class="brand__logo" aria-hidden="true"></div>
+      <div>
+        <div class="brand__title">Consumo por línea</div>
+        <div class="muted" style="font-size:12px;">Usa el archivo cargado en “Concentrado” (F5 conserva sesión)</div>
+      </div>
+    </div>
+
+    <div class="topbar">
+      <a class="btn" href="index.html">⬅ Volver a Concentrado</a>
+      <span class="tag">Archivo: <strong id="fileTag">—</strong></span>
+    </div>
+  </div>
+
+  <!-- Tabs (navegación) -->
+  <nav class="tabs" aria-label="Secciones">
+    <a class="tab" href="index.html">Concentrado</a>
+    <a class="tab tab--active" href="consumo-por-linea.html">Consumo por línea</a>
+    <a class="tab" href="linea-vs-linea.html">Comparativa</a>
+  </nav>
+
+  <!-- Filtros -->
+  <section class="panel">
+    <div class="grid grid--3">
+      <div>
+        <label class="muted">Línea</label>
+        <select id="selLinea" class="btn" style="width:100%"></select>
+      </div>
+
+      <div>
+        <label class="muted">Categoría MP</label>
+        <select id="selCategoria" class="btn" style="width:100%"></select>
+      </div>
+
+      <div>
+        <label class="muted">Subcategoría (opcional)</label>
+        <select id="selSubcat" class="btn" style="width:100%"></select>
+      </div>
+    </div>
+
+    <!-- Timeline de meses -->
+    <div class="panel panel--ghost" style="margin-top:16px">
+      <div class="muted" style="margin-bottom:8px;">Periodo</div>
+      <div id="timeline" class="topbar" style="flex-wrap:nowrap; overflow:auto; gap:8px"></div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid--3" style="margin-top:10px">
+      <div class="kpi"><div class="kpi__label">Cantidad Teórica</div><div class="kpi__value" id="kTeo">—</div></div>
+      <div class="kpi"><div class="kpi__label">Cantidad Real</div><div class="kpi__value" id="kReal">—</div></div>
+      <div class="kpi"><div class="kpi__label">Merma (y %)</div><div class="kpi__value" id="kMerma">—</div></div>
+    </div>
+  </section>
+
+  <!-- Tabla resultado -->
+  <section class="panel">
+    <div class="table-controls top">
+      <div class="muted">Detalle por Materia Prima</div>
+      <button id="btnCSV" class="btn">⬇ Exportar CSV</button>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table class="table" id="tablaLinea">
+        <thead>
+          <tr>
+            <th>Materia Prima</th>
+            <th>Cantidad Teórica</th>
+            <th>Cantidad Real</th>
+            <th>Merma</th>
+            <th>% Merma</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="5" class="muted">Carga un archivo en “Concentrado” y selecciona filtros…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<!-- jQuery + DataTables como en index -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+
+<!-- SheetJS (por si quieres exportar) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- Re-usa tu procesamiento (para catálogo y sesión) -->
+<script src="procesamientoDatos.js?v=3"></script>
+
+<!-- Lógica específica de esta vista -->
+<script src="consumo-por-linea.js?v=1"></script>
+</body>
+</html>
