@@ -98,35 +98,35 @@
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 
 <script>
-          // --- NUEVO: inicializador perezoso de DataTables ---
-      function ensureDataTable() {
-        if ($.fn.dataTable.isDataTable("#tablaMP")) {
-          // si ya existe, solo ajusta y redibuja
-          $("#tablaMP").DataTable().columns.adjust().draw(false);
-          return;
-        }
-        $("#tablaMP").DataTable({
-          pageLength: 25,
-          autoWidth: false,
-          ordering: true,
-          order: [[5, "asc"]], // Fecha
-          language: { url: "https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-MX.json" },
-          dom: "lfrtip",
-          columnDefs: [
-            { targets: [7,8,9,10,11,12], className: "dt-right" }, // numéricos
-            { targets: [5], className: "dt-center" }              // fecha
-          ],
-          initComplete: function(){
-            const $wrap = $(this.api().table().container());
-            $wrap.find("div.dataTables_length").appendTo("#dt-length");
-            $wrap.find("div.dataTables_filter").appendTo("#dt-filter");
-            $wrap.find("div.dataTables_info").appendTo("#dt-info");
-            $wrap.find("div.dataTables_paginate").appendTo("#dt-pager");
-          }
-        });
+  // --- Inicializador de DataTables ---
+  function ensureDataTable() {
+    if ($.fn.dataTable.isDataTable("#tablaMP")) {
+      $("#tablaMP").DataTable().columns.adjust().order([5, "asc"]).draw(false);
+      return;
+    }
+    $("#tablaMP").DataTable({
+      pageLength: 10,                 // ← default 10
+      lengthMenu: [10, 25, 50],       // ← opciones 10/25/50
+      autoWidth: false,
+      ordering: true,
+      order: [[5, "asc"]],            // ← Fecha (más antigua primero)
+      language: { url: "https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-MX.json" },
+      dom: "lfrtip",
+      columnDefs: [
+        { targets: [7,8,9,10,11,12], className: "dt-right" }, // numéricos
+        { targets: [5], className: "dt-center" }              // fecha
+      ],
+      initComplete: function(){
+        const $wrap = $(this.api().table().container());
+        $wrap.find("div.dataTables_length").appendTo("#dt-length");
+        $wrap.find("div.dataTables_filter").appendTo("#dt-filter");
+        $wrap.find("div.dataTables_info").appendTo("#dt-info");
+        $wrap.find("div.dataTables_paginate").appendTo("#dt-pager");
       }
-
+    });
+  }
 </script>
+
 
 
 
