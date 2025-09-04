@@ -579,7 +579,7 @@
             b.id = "chartsLoader";
             b.innerHTML = `<div class="box"><span class="spin"></span><span class="title">Generando gráficas…</span></div>`;
 
-            // Lo insertamos ANTES del área de gráficas para que quede "arriba de todo"
+            // Lo insertamos ANTES del área de gráficas para que quede "arriba de todo" jeje
             area.parentNode.insertBefore(b, area);
         }
         return b;
