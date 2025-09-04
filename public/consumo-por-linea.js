@@ -352,6 +352,8 @@
             MateriaPrima: r.MateriaPrima ?? r["Materia Prima"] ?? "",
             CantidadTeorica: Number(r.CantidadTeorica ?? 0),
             CantidadReal: Number(r.CantidadReal ?? 0),
+            CostoMerma: Number(r.CostoMerma ?? 0),      // ⬅️ agregar
+            CostoUnitario: Number(r.CostoUnitario ?? 0),// ⬅️ opcional
             Merma: Number(r.Merma ?? 0),
             Linea: r.Linea ?? r["Línea"] ?? "",
             Fecha: r.Fecha ?? "",

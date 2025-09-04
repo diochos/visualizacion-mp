@@ -253,32 +253,36 @@ img { max-width: 100%; display: block; }
 
 /* Tabla compacta */
 .table {
-  table-layout: fixed;           /* que respete los anchos asignados */
-  width: 100%;
+  table-layout: auto;   /* default, pero lo dejo explícito */
+  width: 100%;          /* llena el contenedor, repartiendo según contenido */
+  border-collapse: collapse;
 }
+
 .table th, .table td {
   padding: 8px 10px;             /* más compacto */
   font-size: 12px;               /* más pequeño */
   white-space: nowrap;           /* evita saltos raros */
   overflow: hidden;              /* oculta exceso */
-  text-overflow: ellipsis;       /* ... */
+  text-overflow: ellipsis;   
+  width: auto !important; 
+  word-break: break-word;   /* anula tus nth-child anteriores */    /* ... */
 }
 .table thead th { position: sticky; top: 0; z-index: 2; } /* header pegado (opcional) */
 
 /* Anchos sugeridos por columna (ajústalos a tu gusto) */
-.table thead th:nth-child(1),  .table tbody td:nth-child(1)  { width: 160px; } /* CodigoMP */
-.table thead th:nth-child(2),  .table tbody td:nth-child(2)  { width: 280px; } /* Materia Prima */
-.table thead th:nth-child(3),  .table tbody td:nth-child(3)  { width: 220px; } /* Línea */
-.table thead th:nth-child(4),  .table tbody td:nth-child(4)  { width: 140px; } /* Código de artículo */
-.table thead th:nth-child(5),  .table tbody td:nth-child(5)  { width: 260px; } /* Nombre de artículo */
-.table thead th:nth-child(6),  .table tbody td:nth-child(6)  { width: 110px; text-align:center; } /* Fecha */
-.table thead th:nth-child(7),  .table tbody td:nth-child(7)  { width: 140px; } /* Producción */
+.table thead th:nth-child(1),  .table tbody td:nth-child(1)  
+.table thead th:nth-child(2),  .table tbody td:nth-child(2) 
+.table thead th:nth-child(3),  .table tbody td:nth-child(3) 
+.table thead th:nth-child(4),  .table tbody td:nth-child(4) 
+.table thead th:nth-child(5),  .table tbody td:nth-child(5)  
+.table thead th:nth-child(6),  .table tbody td:nth-child(6)  {  text-align:center; } /* Fecha */
+.table thead th:nth-child(7),  .table tbody td:nth-child(7)  
 .table thead th:nth-child(8),  .table tbody td:nth-child(8),
 .table thead th:nth-child(9),  .table tbody td:nth-child(9),
 .table thead th:nth-child(10), .table tbody td:nth-child(10),
 .table thead th:nth-child(11), .table tbody td:nth-child(11),
 .table thead th:nth-child(12), .table tbody td:nth-child(12),
-.table thead th:nth-child(13), .table tbody td:nth-child(13) { width: 120px; text-align: right; }
+.table thead th:nth-child(13), .table tbody td:nth-child(13) 
 
 /* DataTables oscura + compacta para que combine */
 .dataTables_wrapper .dataTables_filter input,
@@ -513,3 +517,31 @@ select {
   overflow: hidden;
 }
 #paretoMP{ width:100%; height:100%; display:block; }
+
+
+/* Contenedor único para TODAS las gráficas */
+#chartsArea{
+  display: grid;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+/* Dentro de #chartsArea, los paneles no necesitan margen extra */
+#chartsArea > .panel--chart{ margin-top: 0; position: relative; z-index: 0; }
+
+/* Rejilla y alturas de los 3 paneles de finanzas */
+#financeGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+#financeGrid .panel--chart .chart-wrap{ height: 280px; }
+#riskMapCard .chart-wrap{ height: 360px; }   /* burbuja más alta */
+#financeGrid canvas{ width:100% !important; height:100% !important; display:block; }
+
+@media (max-width: 900px){
+  #financeGrid{ grid-template-columns: 1fr; }
+  #riskMapCard{ grid-column: 1 / -1 !important; }
+}
+
+
