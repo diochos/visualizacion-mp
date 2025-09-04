@@ -545,3 +545,59 @@ select {
 }
 
 
+/* Banner superior para "Generando gráficas…" */
+#chartsLoader {
+  display: none;                 /* visible solo con .is-active */
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 10px 14px;
+  gap: 10px;
+  align-items: center;
+  border-radius: 10px;
+  background: var(--c-surface-2, rgba(0,0,0,.35));
+  box-shadow: 0 2px 12px rgba(0,0,0,.25) inset, 0 6px 20px rgba(0,0,0,.15);
+  color: var(--c-text, #e9edf3);
+  border: 1px solid rgba(255,255,255,.06);
+  backdrop-filter: blur(4px);
+}
+#chartsLoader.is-active { display: flex; }
+
+#chartsLoader .spin {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.25);
+  border-top-color: var(--c-brand, #ff8a00);
+  animation: spin 800ms linear infinite;
+}
+#chartsLoader small {
+  opacity: .9;
+  letter-spacing: .2px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Tabla estable (ancho fijo por celda y sin crecer infinito) */
+#tablaLinea{
+  width: 100%;
+  table-layout: fixed;         /* ← clave: evita auto-medición costosa */
+  border-collapse: collapse;
+}
+#tablaLinea th, #tablaLinea td{
+  white-space: nowrap;         /* no saltar línea */
+  overflow: hidden;            /* recorta */
+  text-overflow: ellipsis;     /* … al final */
+}
+
+/* Anchos balanceados (ajústalos si quieres) */
+#tablaLinea thead th:nth-child(1){ width: 44%; } /* Materia Prima */
+#tablaLinea thead th:nth-child(2){ width: 18%; } /* Teórica */
+#tablaLinea thead th:nth-child(3){ width: 18%; } /* Real */
+#tablaLinea thead th:nth-child(4){ width: 12%; } /* Merma */
+#tablaLinea thead th:nth-child(5){ width: 8%;  } /* % Merma */
+
+/* Altura contenida con scroll (evita que “tome” toda la página) */
+#tablaLineaWrap{              /* crea este wrapper si no existe (ver abajo) */
+  max-height: 60vh;
+  overflow: auto;
+}
