@@ -536,7 +536,7 @@ select {
   gap: 16px;
 }
 #financeGrid .panel--chart .chart-wrap{ height: 280px; }
-#riskMapCard .chart-wrap{ height: 360px; }   /* burbuja más alta */
+#riskMapCard .chart-wrap{ height: 500px; }   /* burbuja más alta */
 #financeGrid canvas{ width:100% !important; height:100% !important; display:block; }
 
 @media (max-width: 900px){
