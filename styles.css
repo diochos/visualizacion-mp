@@ -544,38 +544,58 @@ select {
   #riskMapCard{ grid-column: 1 / -1 !important; }
 }
 
+/* Overlay de carga a pantalla completa */
+#chartsLoader{
+  /* oculto hasta que tenga .is-active */
+  display: none;
 
-/* Banner superior para "Generando gráficas…" */
-#chartsLoader {
-  display: none;                 /* visible solo con .is-active */
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  padding: 10px 14px;
-  gap: 10px;
+  /* pantalla completa, por encima de todo */
+  position: fixed;
+  inset: 0;               /* top/right/bottom/left: 0 */
+  z-index: 9999;
+
+  /* centrar contenido */
+  justify-content: center;
   align-items: center;
-  border-radius: 10px;
-  background: var(--c-surface-2, rgba(0,0,0,.35));
-  box-shadow: 0 2px 12px rgba(0,0,0,.25) inset, 0 6px 20px rgba(0,0,0,.15);
-  color: var(--c-text, #e9edf3);
-  border: 1px solid rgba(255,255,255,.06);
+
+  /* oscurecer + blur del fondo */
+  background: rgba(0,0,0,.55);
   backdrop-filter: blur(4px);
 }
-#chartsLoader.is-active { display: flex; }
 
-#chartsLoader .spin {
-  width: 16px; height: 16px;
+/* cuando está activo, se muestra como flex */
+#chartsLoader.is-active{ display: flex; }
+
+/* cajita centrada (opcional, ver B) */
+#chartsLoader .box{
+  display: flex; gap: 12px; align-items: center;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(20,22,26,.92);
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 12px 40px rgba(0,0,0,.45);
+  color: var(--c-text, #e9edf3);
+}
+
+/* spinner */
+#chartsLoader .spin{
+  width: 20px; height: 20px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.25);
+  border: 3px solid rgba(255,255,255,.25);
   border-top-color: var(--c-brand, #ff8a00);
   animation: spin 800ms linear infinite;
 }
-#chartsLoader small {
-  opacity: .9;
-  letter-spacing: .2px;
+
+/* texto */
+#chartsLoader .title{
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  opacity: .95;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin{ to{ transform: rotate(360deg); } }
+
 
 /* Tabla estable (ancho fijo por celda y sin crecer infinito) */
 #tablaLinea{
