@@ -255,6 +255,17 @@
     monthButtons.querySelector('button[data-mk="ALL"]')?.classList.add("active");
     setPeriodLoading(false);
   }
+    // Asegura el wrapper con scroll para la tabla (si no existe en el HTML)
+  (function ensureTablaLineaWrap(){
+    const t = document.getElementById('tablaLinea');
+    if (t && t.parentElement?.id !== 'tablaLineaWrap') {
+      const wrap = document.createElement('div');
+      wrap.id = 'tablaLineaWrap';
+      t.parentNode.insertBefore(wrap, t);
+      wrap.appendChild(t);
+    }
+  })();
+
 
   // --------- render ---------
   function render(){

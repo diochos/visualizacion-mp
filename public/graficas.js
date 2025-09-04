@@ -568,6 +568,38 @@
         return area;
     }
 
+    // === Banner global "Generando gráficas…" ===
+        let _loaderUseCount = 0, _loaderHideTimer = null;
+
+        function ensureChartsLoader(){
+        const area = ensureChartsArea(); // ya la tienes definida
+        let b = document.getElementById("chartsLoader");
+        if (!b){
+            b = document.createElement("div");
+            b.id = "chartsLoader";
+            b.innerHTML = `<span class="spin"></span><small>Generando gráficas…</small>`;
+            // Lo insertamos ANTES del área de gráficas para que quede "arriba de todo"
+            area.parentNode.insertBefore(b, area);
+        }
+        return b;
+        }
+
+        function showChartsLoader(){
+        const b = ensureChartsLoader();
+        _loaderUseCount++;
+        clearTimeout(_loaderHideTimer);
+        b.classList.add("is-active");
+        }
+        function hideChartsLoader(){
+        // damos un pequeño margen para evitar parpadeos si hay renders encadenados
+        _loaderUseCount = Math.max(0, _loaderUseCount - 1);
+        if (_loaderUseCount === 0){
+            const b = ensureChartsLoader();
+            _loaderHideTimer = setTimeout(()=> b.classList.remove("is-active"), 250);
+        }
+        }
+
+
     
     function normalizeChartsOrder(){
         const area   = ensureChartsArea();
@@ -1055,15 +1087,27 @@
 
   // ---------- orquestación ----------
   function drawAll(detail){
+    showChartsLoader();    
     const rows = detail?.rows || [];
     drawCostoDaily(rows);
     drawCostoPareto(rows);
     drawRisk(rows);
     normalizeChartsOrder(); // 👈 aquí
+     hideChartsLoader();    
     }
 
+    // render en cambios de filtros
     window.addEventListener("vmps:update", (e)=>{
+        showChartsLoader();
         drawAll(e.detail);
-        normalizeChartsOrder(); // 👈 y aquí
+        hideChartsLoader();
     });
+    // primer pintado si ya hay estado
+    if (window.VMPS?.getFilteredRows){
+        showChartsLoader();
+        drawAll({ rows: window.VMPS.getFilteredRows() });
+        hideChartsLoader();
+    }
+
+
 })();
