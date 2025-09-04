@@ -9,7 +9,6 @@ const normalizeMP = (s) => (s ?? "")
 const CATS = [
   { name: "Adhesivos",  re: /(adhesiv|hot.?melt|euromelt|innocoll|sanyhot)\b/ },
   { name: "Aditivos",   re: /(aditiv|antiyellow|clarificant)/ },
-  { name: "Azúcar",     re: /\bazucar\b/ },
   { name: "Gases",      re: /\bco2\b|gas\s*carbonic|gas\s*nitr(o|og|ó)gen/ },
   { name: "Empaque / Bolsas", re: /\bbolsa\b|banda\s+de\s+garant(i|í)a(?!.*co2)|\bpetg\b/ },
   { name: "Envases (Vidrio)", re: /(botella.*vidrio|vidrio\s*(nr|no\s*retorn))/ },
@@ -211,8 +210,9 @@ async function parseArrayBufferToRows(ab){
   const iProd         = idx(/producci[oó]n/);
   const iTeo          = idx(/cantidad\s*te[oó]rica/);
   const iReal         = idx(/cantidad\s*real(\s*total)?/);
-  const iMerma        = idx(/\bmerma\b/);
-  const iCostoMerma   = idx(/costo\s*merma/);
+  const iMerma = header.findIndex(c => is(c, /\bmerma\b/) && !is(c, /costo/));
+  const iCostoMerma = idx(/costo.*merma|merma.*costo/);        // "Costo de merma", "Costo total merma", etc.
+  const iCostoUnit  = idx(/(costo|precio).*(unitario|kg|pza|pieza)/); // "Costo unitario", "Costo kg", "Precio unitario"
 
   const splitOnce = (txt) => {
     const s = String(txt || "");
@@ -235,7 +235,12 @@ async function parseArrayBufferToRows(ab){
     const cantTeor   = num(row[iTeo]);
     const cantReal   = num(row[iReal]);
     const merma      = num(row[iMerma]);
-    const costoMerma = num(row[iCostoMerma]);
+    const costoMerma = num(iCostoMerma >= 0 ? row[iCostoMerma] : 0);
+    const costoUnit  = num(iCostoUnit  >= 0 ? row[iCostoUnit ] : 0);
+
+    const costoCalc  = (isFinite(costoMerma) && costoMerma !== 0)
+      ? costoMerma
+      : (isFinite(costoUnit) ? merma * costoUnit : 0);
 
     const [codigoMP, materiaPrima] = splitOnce(articuloDesc);
     const [codArticulo, nombreArt] = splitOnce(codNombre);
@@ -255,7 +260,8 @@ async function parseArrayBufferToRows(ab){
       CantidadTeorica: cantTeor,
       CantidadReal: cantReal,
       Merma: merma,
-      CostoMerma: costoMerma,
+      CostoMerma:      costoCalc,        // <<< usa el calculado
+      CostoUnitario: isFinite(costoUnit) ? costoUnit : 0, 
       RendPct:  cantReal > 0 ? (cantTeor / cantReal) * 100 : 0,
       MermaPct: cantReal > 0 ? (merma   / cantReal) * 100 : 0,
     }));
