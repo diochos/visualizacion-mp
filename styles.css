@@ -621,3 +621,83 @@ select {
   max-height: 60vh;
   overflow: auto;
 }
+
+
+/* ===== Chips oscuros con activo naranja translúcido ===== */
+:root{
+  --brand: var(--c-brand, #ff8a00); /* usa tu var si existe */
+}
+
+.chips{ display:flex; flex-wrap:wrap; gap:10px; }
+
+.chips .chip{
+  appearance:none; -webkit-appearance:none;
+  background:#000;                     /* fondo NEGRO */
+  color:#e5e7eb;                       /* texto gris claro */
+  border:1px solid #2a2a2a;            /* borde gris oscuro */
+  padding:6px 14px;
+  border-radius:999px;
+  cursor:pointer;
+  font-weight:500;
+  line-height:1;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, transform .05s ease;
+}
+.chips .chip:hover{
+  background:#0b0b0b;
+  border-color:#444;
+}
+.chips .chip:active{ transform: translateY(1px); }
+.chips .chip:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 2px rgba(255,255,255,.06);
+}
+
+/* Activo: naranja TRANSPARENTE */
+.chips .chip--on{
+  background: rgba(255,138,0,.22);     /* naranja translúcido */
+  border-color: var(--brand);
+  color:#fff;
+  box-shadow: 0 0 0 1px rgba(255,138,0,.35) inset;
+}
+
+/* (opcional) “Todas” un pelín distinto cuando NO está todo seleccionado */
+.chips .chip:first-child:not(.chip--on){
+  opacity:.85;
+}
+
+/* Periodo (linea-vs-linea) — botón activo visible */
+#lvslMonthButtons .btn{
+  background:#000;
+  color:#e5e7eb;
+  border:1px solid #2a2a2a;
+  border-radius:14px;
+  padding:6px 10px;
+}
+#lvslMonthButtons .btn:hover{
+  background:#0b0b0b;
+  border-color:#444;
+}
+
+/* seleccionado */
+#lvslMonthButtons .btn.active,
+#lvslMonthButtons .btn[aria-pressed="true"]{
+  background: rgba(255,138,0,.22);           /* naranja translúcido */
+  border-color: var(--c-brand, #ff8a00);
+  color:#fff;
+  box-shadow: 0 0 0 1px rgba(255,138,0,.35) inset;
+}
+
+/* versión ghost (Personalizado) cuando está activo */
+#lvslMonthButtons .btn.btn--ghost.active,
+#lvslMonthButtons .btn.btn--ghost[aria-pressed="true"]{
+  background: rgba(255,138,0,.22);
+  border-color: var(--c-brand, #ff8a00);
+  color:#fff;
+}
+
+.crit-sum{
+  display:flex; align-items:center; gap:12px;
+  padding:12px 14px; border:1px dashed var(--border,#2a2a2a);
+  border-radius:10px; background:rgba(255,138,0,.06); color:#fff;
+}
+.crit-sum b{ color:#fff; }
