@@ -66,10 +66,10 @@
   const isExcludedLine = (name) => LINE_BLACKLIST.some(re => re.test(normalize(name)));
 
   const CAT_COMBINED_VAL = "__PRE_RESINA_PET__";
-  const CAT_COMBINED_LABEL = "Preforma + Resina PET";
+  const CAT_COMBINED_LABEL = "Preforma y Resina PET";
   const isPreformaPet = (c) => { const n = normalize(c); return n.includes("preforma") && n.includes("pet"); };
   const isResinaPet   = (c) => { const n = normalize(c); return n.includes("resina")   && n.includes("pet"); };
-  const RESINA_TO_PIEZAS = 1000 / 18.5; // kg → piezas
+  const RESINA_TO_PIEZAS =1000/18.5; // kg → piezas
 
   // ---------- datos base: SIEMPRE todas las filas ----------
   function seedRows() {
