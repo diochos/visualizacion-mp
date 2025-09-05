@@ -188,6 +188,17 @@
         }
       }
     });
+    // === Botones export Pareto ===
+  __addExportButtons("paretoCard", {
+    onPNG: ()=> __exportCanvasPNG(document.getElementById("paretoMP"), "pareto_mp"),
+    onCSV: ()=> {
+      // Usa las mismas variables que ya tienes al renderizar:
+      // labels (MP), bars (valor de barra, %), accumRel (acumulado relativo, %)
+      const headers = ["Materia Prima", "% Merma (barra)", "% Acumulado relativo"];
+      const rows    = labels.map((mp,i)=> [mp, bars[i], accumRel[i]]);
+      __exportArrayToCSV(headers, rows, "pareto_mp");
+    }
+  });
 
     if (meta){
       // ej.: “Total % merma (eje izq máx): 27.14% · Modo: % Merma…”
@@ -424,6 +435,17 @@
           }
         }
       });
+
+      __addExportButtons("trendCard", {
+      onPNG: ()=> __exportCanvasPNG(document.getElementById("trendPctMerma"), "trend_%merma"),
+      onCSV: ()=> {
+        // tienes `dates` y `pct` calculados en buildDailySeries(...)
+        const headers = ["Fecha", "% merma"];
+        const rows = dates.map((d,i)=> [d, pct[i]]);
+        __exportArrayToCSV(headers, rows, "trend_%merma");
+      }
+    });
+
 
       if (meta){
         const first = dates[0], last = dates[dates.length-1];
@@ -746,6 +768,16 @@
       showStatus(status, "Error al generar la gráfica");
       if (meta) meta.textContent = "";
     }
+    __addExportButtons("costoDailyCard", {
+      onPNG: ()=> __exportCanvasPNG(document.querySelector("#costoDailyCard canvas"), "costo_diario"),
+      onCSV: ()=> {
+        // tienes dates/labels/vals
+        const headers = ["Fecha", "Costo de merma (MXN)"];
+        const rows = dates.map((d,i)=> [d, vals[i]]);
+        __exportArrayToCSV(headers, rows, "costo_diario");
+      }
+    });
+
   }
 
  
@@ -1112,3 +1144,90 @@
 
 
 })();
+
+// --- EXPORT HELPERS (PNG / CSV) ---
+function __exportCanvasPNG(canvas, filenameBase = "grafica") {
+  if (!canvas) return;
+  const bg = getComputedStyle(document.body).getPropertyValue("background-color") || "#111";
+  const tmp = document.createElement("canvas");
+  tmp.width  = canvas.width;
+  tmp.height = canvas.height;
+  const ctx = tmp.getContext("2d");
+  ctx.fillStyle = bg || "#111";
+  ctx.fillRect(0, 0, tmp.width, tmp.height);
+  ctx.drawImage(canvas, 0, 0);
+  const a = document.createElement("a");
+  a.download = `${filenameBase}.png`;
+  a.href = tmp.toDataURL("image/png", 1.0);
+  a.click();
+}
+
+function __exportArrayToCSV(headers = [], rows = [], filenameBase = "datos") {
+  const esc = (v) => {
+    const s = (v ?? "").toString();
+    return /[",\n;]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  };
+  const head = headers.map(esc).join(",");
+  const body = rows.map(r => r.map(esc).join(",")).join("\n");
+  const csv = head + "\n" + body;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${filenameBase}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Añade botones a un <section class="panel"> (encabezado del panel)
+function __ensurePanelActions(panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return null;
+
+  let head = panel.querySelector(".panel__head");
+  if (!head) head = panel.querySelector("header") || panel;
+
+  let box = panel.querySelector(".panel__actions");
+  if (!box) {
+    box = document.createElement("div");
+    box.className = "panel__actions";
+    box.style.display = "flex";
+    box.style.gap = "8px";
+    box.style.marginLeft = "auto";
+    // intenta colocarlo al lado del meta si existe
+    const meta = head.querySelector(".panel__meta");
+    (meta?.parentNode || head).appendChild(box);
+    if (!meta) head.style.display = "flex";
+  }
+  return box;
+}
+
+function __addExportButtons(panelId, { onPNG, onCSV, labelCSV = "CSV", labelPNG = "PNG" }) {
+  const box = __ensurePanelActions(panelId);
+  if (!box) return;
+
+  // Evita duplicar
+  const mark = `data-actions-for-${panelId}`;
+  if (box.getAttribute(mark) === "1") return;
+  box.setAttribute(mark, "1");
+
+  const mkBtn = (txt) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn btn--ghost";
+    b.textContent = txt;
+    b.style.padding = "6px 10px";
+    b.style.borderRadius = "12px";
+    return b;
+  };
+
+  if (onPNG) {
+    const bPng = mkBtn(labelPNG);
+    bPng.onclick = onPNG;
+    box.appendChild(bPng);
+  }
+  if (onCSV) {
+    const bCsv = mkBtn(labelCSV);
+    bCsv.onclick = onCSV;
+    box.appendChild(bCsv);
+  }
+}
