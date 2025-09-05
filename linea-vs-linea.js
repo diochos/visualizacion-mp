@@ -132,7 +132,7 @@
           <th>Costo de merma (MXN)</th>
           <th>Merma (unidades)</th>
           <th>% Merma</th>
-          <th>% del Total (unidades)</th>
+          <th>% del Real Producido</th>
         </tr>
       </thead>
       <tbody><tr><td colspan="5" class="muted">Sin datos…</td></tr></tbody>
@@ -455,10 +455,12 @@
         const cu  = getCostoUnit(r);
         let cost  = isFinite(cu) && cu > 0 ? (mermaU * cu) : getCostoMerma(r);
 
-        const o = map.get(L) || { real:0, merma:0, cost:0 };
-        o.real  += m.real;
-        o.merma += mermaU;
-        o.cost  += cost;
+        const o = map.get(L) || { teo:0, real:0, cost:0 };
+        o.teo  += m.teo;
+        o.real += m.real;
+        // el costo sí se suma por registro:
+        o.cost += (isFinite(cu)&&cu>0 ? (absRowMerma*cu) : getCostoMerma(r));
+
         map.set(L, o);
     }
     return map;
@@ -480,7 +482,9 @@
 
     // métricas derivadas
     for (const o of arr){
-        o.pctMerma = o.real>0 ? (o.merma/o.real*100) : 0;
+        o.merma    = Math.abs(o.real - o.teo);          // neta por línea
+        o.pctMerma = o.real > 0 ? (o.merma/o.real*100) : 0;
+
         o.shareR   = totalReal>0 ? (o.real/totalReal*100) : 0;
     }
 
@@ -493,7 +497,7 @@
         <span>La línea más crítica es <b>${top.linea}</b>.</span>
         <span>Impacto estimado: <b>${fmtMXN(top.cost)}</b></span>
         <span>Merma: <b>${fmt(top.merma,2)}</b> u. (${fmt(top.pctMerma,2)}%)</span>
-        <span>Participa el <b>${fmt(top.shareR,1)}%</b> del Total (unidades).</span>
+        <span>Participa el <b>${fmt(top.shareR,1)}%</b> del Total Real Producido.</span>
     `;
 
     // tabla (Top 5)
