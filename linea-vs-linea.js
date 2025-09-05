@@ -56,7 +56,7 @@
 
     // En esta página calcularemos la merma con |Real - Teórica|,
     // así funciona tanto para Etiquetas (Real > Teórica) como para otros casos.
-    const calcMermaFrom = (teo, real) => Math.abs(real - teo);
+    const calcMermaFrom = (teo, real) => (real - teo); // permite merma negativa
 
   
   const getCat = (r) => r?.CategoriaMP ?? r?.Categoria ?? r?.["Categoría MP"] ?? r?.cat ?? "Otros";
@@ -459,7 +459,7 @@
         o.teo  += m.teo;
         o.real += m.real;
         // el costo sí se suma por registro:
-        o.cost += (isFinite(cu)&&cu>0 ? (absRowMerma*cu) : getCostoMerma(r));
+        o.cost += (isFinite(cu)&&cu>0 ? (mermaU*cu) : getCostoMerma(r));
 
         map.set(L, o);
     }
@@ -482,7 +482,7 @@
 
     // métricas derivadas
     for (const o of arr){
-        o.merma    = Math.abs(o.real - o.teo);          // neta por línea
+        o.merma    = (o.real - o.teo);                 // antes: Math.abs(...)
         o.pctMerma = o.real > 0 ? (o.merma/o.real*100) : 0;
 
         o.shareR   = totalReal>0 ? (o.real/totalReal*100) : 0;
