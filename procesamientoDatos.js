@@ -9,13 +9,15 @@ const normalizeMP = (s) => (s ?? "")
 const CATS = [
   { name: "Adhesivos",  re: /(adhesiv|hot.?melt|euromelt|innocoll|sanyhot)\b/ },
   { name: "Aditivos",   re: /(aditiv|antiyellow|clarificant)/ },
-  { name: "Gases",      re: /\bco2\b|gas\s*carbonic|gas\s*nitr(o|og|ó)gen/ },
+  { name: "Co2",      re: /\bco2\b|gas\s*carbonic/ },
+  { name: "Nitrógeno",      re: /gas\s*nitr(o|og|ó)gen/ },
   { name: "Empaque / Bolsas", re: /\bbolsa\b|banda\s+de\s+garant(i|í)a(?!.*co2)|\bpetg\b/ },
-  { name: "Envases (Vidrio)", re: /(botella.*vidrio|vidrio\s*(nr|no\s*retorn))/ },
+  //{ name: "Envases (Vidrio)", re: /(botella.*vidrio|vidrio\s*(nr|no\s*retorn))/ },
   { name: "Concentrados / Jarabes", re: /\bjarab|concentrad/ },
   { name: "Etiquetas",  re: /\betiqu/ },
   { name: "Tapas Metálicas (Hermetapas)", re: /(hermetapa|pry[ -]?off|tapon\s*corona|chapa\b)/ },
-  { name: "Emplaye / Termoencogible (kg)", re: /(pelicul|sleeve|termoencog|stretch\s*film|emplaye|x\s*pack)/ },
+  { name: "Termoencogible", re: /(termoencog|sleeve)/ },
+  { name: "Stretch Film / Emplaye", re: /(stretch\s*film|emplaye|x\s*pack)/ },
   { name: "Preformas PET", re: /\bpreform|prefo\b/ },
   { name: "Resinas PET", re: /\bresin|pcr001|mb\+?912|recuperad/ },
   { name: "Separadores / Cartón", re: /(separador|carton|corrugad|charola|bandeja|division)/ },
@@ -23,10 +25,7 @@ const CATS = [
 ];
 
 const SUBCATS = {
-  "Emplaye / Termoencogible (kg)": [
-    { name: "Termoencogible", re: /(termoencog|sleeve)/ },
-    { name: "Stretch Film / Emplaye", re: /(stretch\s*film|emplaye|x\s*pack)/ },
-  ],
+
   "Concentrados / Jarabes": [
     { name: "Jarabe", re: /\bjarab/ },
     { name: "Concentrado", re: /concentrad/ },
@@ -39,21 +38,8 @@ const SUBCATS = {
     { name: "Twist-off 38 mm", re: /twist\s*off.*\b38\s*mm\b/ },
     { name: "Genérica", re: /.*/ },
   ],
-  "Preformas PET": [
-    { name: "Peso 11–20 g", re: /\b(1[1-9](?:\.\d)?)\s*g[r]?\b/ },
-    { name: "Peso 21–35 g", re: /\b(2[1-9]|3[0-5])(?:\.\d)?\s*g[r]?\b/ },
-    { name: "Peso 36–60 g", re: /\b(3[6-9]|[4-5]\d|60)(?:\.\d)?\s*g[r]?\b/ },
-    { name: "Boca 26 mm / 2622", re: /\b26\s*mm\b|\b2622\b/ },
-    { name: "Boca 28 mm / 1873", re: /\b28\s*mm\b|\b1873\b/ },
-    { name: "Proveedor / Maquila", re: /(alpla|petstar|maquila)/ },
-    { name: "Genérica", re: /.*/ },
-  ],
-  "Resinas PET": [
-    { name: "Virgen (MB+912)", re: /(virgen|mb\+?912)/ },
-    { name: "Reciclada PCR (PCR001)", re: /(pcr001|recicl)/ },
-    { name: "Recuperada / Granel", re: /(recuperad|granel)/ },
-    { name: "Genérica", re: /.*/ },
-  ],
+
+
   "Etiquetas": [
     { name: "Coca-Cola", re: /coca\s*cola|cc\b/ },
     { name: "Cristal/Agua", re: /cristal|agua/ },
