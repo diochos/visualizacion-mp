@@ -3,144 +3,205 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Visualización MP — Consumo por línea</title>
+  <title>Visualización MP - Consumo</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* por si acaso */
+    .spa-view.hidden { display: none !important; }
+  </style>
 </head>
 <body>
   <!-- Loader global de página -->
-<div id="pageLoader" role="status" aria-live="polite">
-  <div class="pageLoader__box">
-    <div class="pageLoader__spinner" aria-hidden="true"></div>
-    <strong>Cargando…</strong>
-  </div>
-</div>
-
-<div class="container">
-
-  <!-- Header -->
-  <div class="header">
-    <div class="brand">
-      <div class="brand__logo" aria-hidden="true"></div>
-      <div>
-        <div class="brand__title">Consumo por línea</div>
-       
-      </div>
-    </div>
-
-    <div class="topbar">
-      <a class="btn" href="index.html">⬅ Volver a Concentrado</a>
-      <span class="tag">Archivo: <strong id="fileTag">—</strong></span>
+  <div id="pageLoader" role="status" aria-live="polite">
+    <div class="pageLoader__box">
+      <div class="pageLoader__spinner" aria-hidden="true"></div>
+      <strong>Cargando…</strong>
     </div>
   </div>
 
-  <!-- Tabs (navegación) -->
-  <nav class="tabs" aria-label="Secciones">
-    <a class="tab" href="index.html">Concentrado</a>
-    <a class="tab tab--active" href="consumo-por-linea.html">Consumo por línea</a>
-    <a class="tab" href="linea-vs-linea.html">Comparativa</a>
-  </nav>
+  <div class="container">
 
-  <!-- Filtros -->
-  <section class="panel">
-    <div class="grid grid--3">
-      <div>
-        <label class="muted">Línea</label>
-        <select id="selLinea" class="btn" style="width:100%"></select>
+    <!-- Header -->
+    <div class="header">
+      <div class="brand">
+        <div class="brand__logo" aria-hidden="true"></div>
+        <div>
+          <div class="brand__title">Consumo de Materia Prima</div>
+        </div>
       </div>
 
-      <div>
-        <label class="muted">Categoría MP</label>
-        <select id="selCategoria" class="btn" style="width:100%"></select>
-      </div>
-
-      <div>
-        <label class="muted">Subcategoría (opcional)</label>
-        <select id="selSubcat" class="btn" style="width:100%"></select>
+      <div class="topbar">
+        <a class="btn" href="index.html">⬅ Volver a Concentrado</a>
+        <span class="tag">Archivo: <strong id="fileTag">—</strong></span>
       </div>
     </div>
+
+    <!-- Tabs (navegación) -->
+    <nav class="tabs" aria-label="Secciones">
+      <a class="tab" href="index.html">Concentrado</a>
+      <a class="tab tab--active" href="#consumo-por-linea-html" data-view="consumo-por-linea-html">Consumo por línea</a>
+      <a class="tab" href="#linea-vs-linea-html" data-view="linea-vs-linea-html">Comparativa</a>
+    </nav>
+
+    <!-- ===== VISTA 1: Consumo por línea ===== -->
+    <section id="consumo-por-linea-html" class="spa-view">
+
+      <!-- Filtros -->
+      <section class="panel">
+        <div class="grid grid--3">
+          <div>
+            <label class="muted">Línea</label>
+            <select id="selLinea" class="btn" style="width:100%"></select>
+          </div>
+
+          <div>
+            <label class="muted">Categoría MP</label>
+            <select id="selCategoria" class="btn" style="width:100%"></select>
+          </div>
+
+          <div>
+            <label class="muted">Subcategoría (opcional)</label>
+            <select id="selSubcat" class="btn" style="width:100%"></select>
+          </div>
+        </div>
 
         <!-- Periodo -->
-    <div class="panel panel--ghost" style="margin-top:16px">
-      <div class="muted" style="margin-bottom:8px;">Periodo</div>
+        <div class="panel panel--ghost" style="margin-top:16px">
+          <div class="muted" style="margin-bottom:8px;">Periodo</div>
 
-      <!-- Botones de mes (se llenan en JS) -->
-      <div id="monthButtons" class="topbar" style="gap:8px; flex-wrap:wrap"></div>
-      <!-- Overlay local de periodo -->
-      <div id="periodOverlay" class="period-overlay hidden">
-        <span class="spinner" aria-hidden="true"></span>
-        <span style="margin-left:8px">Cargando fechas…</span>
+          <!-- Botones de mes (se llenan en JS) -->
+          <div id="monthButtons" class="topbar" style="gap:8px; flex-wrap:wrap"></div>
+          <!-- Overlay local de periodo -->
+          <div id="periodOverlay" class="period-overlay hidden">
+            <span class="spinner" aria-hidden="true"></span>
+            <span style="margin-left:8px">Cargando fechas…</span>
+          </div>
+
+          <!-- Rango personalizado (se muestra solo si eliges "Personalizado") -->
+          <div id="customRange" class="topbar" style="gap:8px; flex-wrap:wrap; display:none; margin-top:8px;">
+            <label class="muted" for="dateStart">Inicio</label>
+            <input id="dateStart" type="date" class="btn" />
+            <label class="muted" for="dateEnd">Fin</label>
+            <input id="dateEnd" type="date" class="btn" />
+            <button id="btnApplyRange" class="btn" type="button">Aplicar</button>
+            <button id="btnClearRange" class="btn btn--ghost" type="button">Limpiar</button>
+          </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="grid grid--3" style="margin-top:10px">
+          <div class="kpi"><div class="kpi__label">Cantidad Teórica</div><div class="kpi__value" id="kTeo">—</div></div>
+          <div class="kpi"><div class="kpi__label">Cantidad Real</div><div class="kpi__value" id="kReal">—</div></div>
+          <div class="kpi"><div class="kpi__label">Merma (y %)</div><div class="kpi__value" id="kMerma">—</div></div>
+        </div>
+      </section>
+
+      <!-- Tabla resultado -->
+      <section class="panel">
+        <div class="table-controls top">
+          <div class="muted">Detalle por Materia Prima</div>
+          <button id="btnCSV" class="btn">⬇ Exportar CSV</button>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <div id="tablaLineaWrap">
+            <table class="table" id="tablaLinea">
+              <thead>
+                <tr>
+                  <th>Materia Prima</th>
+                  <th>Cantidad Teórica</th>
+                  <th>Cantidad Real</th>
+                  <th>Merma</th>
+                  <th>% Merma</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="5" class="muted">Carga un archivo en “Concentrado” y selecciona filtros…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 👇 Área fija para TODAS las gráficas de esta vista -->
+      <div id="chartsArea"></div>
+      <!-- (graficas.js detecta este contenedor y cuelga aquí: 
+           Pareto MP, consumo diario, costo diario, pareto de costo y mapa de riesgo) -->
+
+    </section>
+    <!-- ===== /VISTA 1 ===== -->
+
+    <!-- ===== VISTA 2: Comparativa (línea vs línea) ===== -->
+    <section id="linea-vs-linea-html" class="spa-view hidden">
+      <div class="panel">
+        <h3 class="panel-title">Comparativa línea vs línea</h3>
+        <div id="lvsl-mount">Cargando comparativa…</div>
       </div>
+    </section>
+    <!-- ===== /VISTA 2 ===== -->
 
-      <!-- Rango personalizado (se muestra solo si eliges "Personalizado") -->
-      <div id="customRange" class="topbar" style="gap:8px; flex-wrap:wrap; display:none; margin-top:8px;">
-        <label class="muted" for="dateStart">Inicio</label>
-        <input id="dateStart" type="date" class="btn" />
-        <label class="muted" for="dateEnd">Fin</label>
-        <input id="dateEnd" type="date" class="btn" />
-        <button id="btnApplyRange" class="btn" type="button">Aplicar</button>
-        <button id="btnClearRange" class="btn btn--ghost" type="button">Limpiar</button>
-      </div>
-    </div>
+  </div><!-- /.container -->
 
+  <!-- DEV: persistir en localStorage (quitar o poner false en producción) -->
+  <script>window.__DEV_PERSIST__ = true;</script>
 
-    <!-- KPIs -->
-    <div class="grid grid--3" style="margin-top:10px">
-      <div class="kpi"><div class="kpi__label">Cantidad Teórica</div><div class="kpi__value" id="kTeo">—</div></div>
-      <div class="kpi"><div class="kpi__label">Cantidad Real</div><div class="kpi__value" id="kReal">—</div></div>
-      <div class="kpi"><div class="kpi__label">Merma (y %)</div><div class="kpi__value" id="kMerma">—</div></div>
-    </div>
-  </section>
+  <!-- jQuery + DataTables como en index -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+  <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 
-  <!-- Tabla resultado -->
-  <section class="panel">
-    <div class="table-controls top">
-      <div class="muted">Detalle por Materia Prima</div>
-      <button id="btnCSV" class="btn">⬇ Exportar CSV</button>
-    </div>
+  <!-- SheetJS (por si quieres exportar) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-    <div style="overflow-x:auto;">
-      <div id="tablaLineaWrap">
-      <table class="table" id="tablaLinea">
-        <thead>
-          <tr>
-            <th>Materia Prima</th>
-            <th>Cantidad Teórica</th>
-            <th>Cantidad Real</th>
-            <th>Merma</th>
-            <th>% Merma</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td colspan="5" class="muted">Carga un archivo en “Concentrado” y selecciona filtros…</td></tr>
-        </tbody>
-      </table>
-      </div>
-    </div>
-  </section>
-</div>
-<!-- DEV: persistir en localStorage (quitar o poner false en producción) -->
-<script>window.__DEV_PERSIST__ = true;</script>
+  <!-- Re-usa tu procesamiento (para catálogo y sesión) -->
+  <script src="procesamientoDatos.js?v=4"></script>
 
-<!-- jQuery + DataTables como en index -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+  <!-- Lógica específica de esta vista -->
+  <script src="consumo-por-linea.js?v=3"></script>
 
-<!-- SheetJS (por si quieres exportar) -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+  <script src="graficas.js?v=20"></script>
 
-<!-- Re-usa tu procesamiento (para catálogo y sesión) -->
-<script src="procesamientoDatos.js?v=4"></script>
+  <!-- Router SPA local para estas dos vistas -->
+  <script>
+  (function () {
+    const VIEWS = ["consumo-por-linea-html", "linea-vs-linea-html"];
+    const loaded = new Set(); // para lazy-load de la comparativa
 
-<!-- Lógica específica de esta vista -->
+    function show(viewId){
+      document.querySelectorAll(".spa-view").forEach(sec => {
+        sec.classList.toggle("hidden", sec.id !== viewId);
+      });
+      document.querySelectorAll('.tabs .tab[data-view]').forEach(a => {
+        a.classList.toggle('tab--active', a.dataset.view === viewId);
+      });
+      if (viewId === "linea-vs-linea-html" && !loaded.has(viewId)) {
+        loaded.add(viewId);
+        const sc = document.createElement("script");
+        sc.src = "linea-vs-linea.js?v=1";
+        document.body.appendChild(sc);
+      }
+    }
 
-<script src="consumo-por-linea.js?v=3"></script>
+    function goFromHash(){
+      const id = (location.hash || "").replace("#","") || "consumo-por-linea-html";
+      show(VIEWS.includes(id) ? id : "consumo-por-linea-html");
+    }
 
+    // intercepta sólo tabs SPA (Concentrado sigue como link normal)
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest('.tabs .tab[data-view]');
+      if (!a) return;
+      e.preventDefault();
+      const id = a.dataset.view;
+      if (location.hash === "#" + id) show(id);
+      else location.hash = id;
+    });
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
-<script src="graficas.js?v=20"></script>
-
-
-
+    window.addEventListener("hashchange", goFromHash);
+    goFromHash();
+  })();
+  </script>
 </body>
 </html>
