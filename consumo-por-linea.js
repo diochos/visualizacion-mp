@@ -1,7 +1,5 @@
-// consumo-por-linea.js — lee sessionStorage comprimido y renderiza filtros/KPIs/tabla
+// consumo-por-linea.js — lee dataset desde IndexedDB (VMPS.loadDataset) y renderiza filtros/KPIs/tabla
 (function(){
-  const SKEY_META = "vmps_meta_v1";
-  const SKEY_ROWS = "vmps_rows_v1";
   const $ = (sel) => document.querySelector(sel);
 
   // ---- Loader global (pantalla completa) ----
@@ -19,35 +17,12 @@
     setTimeout(() => { if (el) el.style.display = "none"; }, 400);
   }
 
-  // --------- compresión ---------
-  async function ensureLZ(){
-    if (window.LZString) return;
-    await new Promise((res, rej)=>{
-      const sc = document.createElement("script");
-      sc.src = "https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js";
-      sc.onload = res; sc.onerror = rej; document.head.appendChild(sc);
-    });
-  }
-  async function loadSessionCompressed(){
-    try{
-      const meta = sessionStorage.getItem(SKEY_META);
-      const data = sessionStorage.getItem(SKEY_ROWS);
-      if (!meta || !data) {
-        const legacy = sessionStorage.getItem("vmpsession_v1");
-        return legacy ? JSON.parse(legacy) : null;
-      }
-      await ensureLZ();
-      const rows = JSON.parse(LZString.decompressFromUTF16(data) || "[]");
-      const { filename } = JSON.parse(meta);
-      return { filename, rows };
-    }catch{ return null; }
-  }
-
   // --------- UI refs ---------
   const fileTag      = $("#fileTag");
   const selLinea     = $("#selLinea");
   const selCategoria = $("#selCategoria");
-  const selSubcat    = $("#selSubcat");
+  const selSubcat    = $("#selSubcat");   // <-- reutilizamos este select para MateriaPrima
+  const selMP        = selSubcat;         // alias semántico
   const tbody        = $("#tablaLinea tbody");
   const kTeo         = $("#kTeo");
   const kReal        = $("#kReal");
@@ -159,13 +134,15 @@
   };
 
   // --- API pública para otras vistas/scripts ---
-  window.VMPS = {
+  // No sobreescribas VMPS: extiéndelo
+  window.VMPS = window.VMPS || {};
+  Object.assign(window.VMPS, {
     last: { rows: [], agg: [], kpis: { teo:0, real:0, merma:0, pMerma:0 } },
     getAllRows: () => state.rows.slice(),
     getFilteredRows: () => window.VMPS.last.rows.slice(),
     getAgg: () => window.VMPS.last.agg.slice(),
     getKPIs: () => ({ ...window.VMPS.last.kpis })
-  };
+  });
   function publishUpdate(rows, agg, kpis){
     window.VMPS.last = { rows, agg, kpis };
     window.dispatchEvent(new CustomEvent("vmps:update", {
@@ -255,7 +232,8 @@
     monthButtons.querySelector('button[data-mk="ALL"]')?.classList.add("active");
     setPeriodLoading(false);
   }
-    // Asegura el wrapper con scroll para la tabla (si no existe en el HTML)
+
+  // Asegura el wrapper con scroll para la tabla (si no existe en el HTML)
   (function ensureTablaLineaWrap(){
     const t = document.getElementById('tablaLinea');
     if (t && t.parentElement?.id !== 'tablaLineaWrap') {
@@ -266,26 +244,23 @@
     }
   })();
 
-
   // --------- render ---------
   function render(){
-    // Si en el primer frame aún no hay selects, salimos
     if (!state.rows.length) return;
 
-    // Forzar defaults si los selects aún no tienen value en el primer frame
+    // Defaults
     const lineasList = uniqueBy(state.rows, "Linea");
     const catsList   = uniqueBy(state.rows, "CategoriaMP");
 
     const lineaSel = (selLinea?.value || lineasList.find(v=>eq(v, DEFAULT_LINEA)) || lineasList[0] || "");
     const catSel   = (selCategoria?.value || catsList.find(v=>eq(v, DEFAULT_CAT)) || catsList[0] || "");
-    const subSel   = selSubcat?.value || "";
 
+    // 1) Filtros básicos: Línea + Categoría
     let rows = state.rows.slice();
     if (lineaSel) rows = rows.filter(r => eq(r.Linea, lineaSel));
     if (catSel)   rows = rows.filter(r => eq(r.CategoriaMP, catSel));
-    if (subSel)   rows = rows.filter(r => eq(r.SubcategoriaMP, subSel));
 
-    // --- filtro por fecha ---
+    // 2) Filtro por fecha
     if (state.filterMode === "month") {
       if (state.monthKey) rows = rows.filter(r => yyyymm(r.FechaISO) === state.monthKey);
     } else {
@@ -294,6 +269,15 @@
       if (ds) rows = rows.filter(r => r.FechaISO && r.FechaISO >= ds);
       if (de) rows = rows.filter(r => r.FechaISO && r.FechaISO <= de);
     }
+
+    // 3) Construir lista de MateriaPrima disponible bajo los filtros previos
+    const mpList = uniqueBy(rows, "MateriaPrima").filter(Boolean);
+    // Rellenar select (placeholder: "Todas las materias primas")
+    fillSelectOptional(selMP, mpList, "Todas las materias primas", selMP.value || "");
+
+    // 4) Filtro por MateriaPrima (si el usuario eligió alguna)
+    const mpSel = selMP?.value || "";
+    if (mpSel) rows = rows.filter(r => eq(r.MateriaPrima, mpSel));
 
     // --- agregados por MP ---
     const map = new Map();
@@ -336,7 +320,7 @@
       tbody.appendChild(frag);
     }
 
-    // Publica para otras vistas (gráficas, etc.)
+    // Publica para otras vistas (gráficas, etc.) — ya con TODOS los filtros, incluyendo MP
     publishUpdate(
       rows,
       agg,
@@ -345,16 +329,22 @@
   }
 
   // --------- init ---------
+  async function loadDataset(){
+    const ds = await window.VMPS?.loadDataset?.();
+    return ds ? { filename: ds.filename || "", rows: ds.rows || [] } : null;
+  }
+
   (async ()=>{
     showPageLoader();
     try {
-      const sess = await loadSessionCompressed();
+      const sess = await loadDataset();
 
       if(!sess || !Array.isArray(sess.rows) || sess.rows.length===0){
         tbody.innerHTML = `<tr><td colspan="5" class="muted">No hay datos. Sube un archivo en <a href="index.html">Concentrado</a> (misma pestaña).</td></tr>`;
       } else {
-        if (fileTag) fileTag.textContent = sess.filename || "Sesión restaurada";
+        if (fileTag) fileTag.textContent = sess.filename || "Dataset restaurado";
 
+        // Tomamos filas del dataset y garantizamos FechaISO por si viniera vacía
         state.rows = sess.rows.map(r => {
           const iso = r.FechaISO && /^\d{4}-\d{2}-\d{2}$/.test(r.FechaISO)
             ? r.FechaISO
@@ -363,32 +353,27 @@
             MateriaPrima: r.MateriaPrima ?? r["Materia Prima"] ?? "",
             CantidadTeorica: Number(r.CantidadTeorica ?? 0),
             CantidadReal: Number(r.CantidadReal ?? 0),
-            CostoMerma: Number(r.CostoMerma ?? 0),      // ⬅️ agregar
-            CostoUnitario: Number(r.CostoUnitario ?? 0),// ⬅️ opcional
+            CostoMerma: Number(r.CostoMerma ?? 0),
+            CostoUnitario: Number(r.CostoUnitario ?? 0),
             Merma: Number(r.Merma ?? 0),
             Linea: r.Linea ?? r["Línea"] ?? "",
             Fecha: r.Fecha ?? "",
             FechaISO: iso,
+            Produccion: r.OPE ?? r.Produccion ?? r["Producción"] ?? r.OP ?? r.Op
+              ?? r.Orden ?? r["Orden Producción"] ?? r.OrdenProduccion ?? "",
             CategoriaMP: r.CategoriaMP ?? "",
-            SubcategoriaMP: r.SubcategoriaMP ?? "",
+            SubcategoriaMP: r.SubcategoriaMP ?? "", // compat
           };
         });
 
         const lineas = uniqueBy(state.rows, "Linea");
         const cats   = uniqueBy(state.rows, "CategoriaMP");
 
-       fillSelectRequired(selLinea, lineas, DEFAULT_LINEA);
+        fillSelectRequired(selLinea, lineas, DEFAULT_LINEA);
         fillSelectRequired(selCategoria, cats,  DEFAULT_CAT);
 
-        // Fuerza valor si no hubo match exacto
-        if (!selLinea.value)     selLinea.value     = (lineas.find(v=>eq(v,DEFAULT_LINEA)) ?? lineas[0] ?? "");
-        if (!selCategoria.value) selCategoria.value = (cats.find(v=>eq(v,DEFAULT_CAT))   ?? cats[0]   ?? "");
-
-        const subsIni = uniqueBy(
-          state.rows.filter(r => eq(r.CategoriaMP, selCategoria.value)),
-          "SubcategoriaMP"
-        ).filter(Boolean);
-        fillSelectOptional(selSubcat, subsIni, "Todas las subcategorías");
+        // El tercer select ahora es MateriaPrima; empezamos vacío con placeholder.
+        fillSelectOptional(selMP, [], "Todas las materias primas");
 
         await buildMonthButtons(state.rows);
 
@@ -419,18 +404,10 @@
         if (dateStart) dateStart.value = "";
         if (dateEnd)   dateEnd.value   = "";
 
-
-        // Listeners selects
-        selCategoria.addEventListener("change", ()=>{
-          const subs = uniqueBy(
-            state.rows.filter(r => eq(r.CategoriaMP, selCategoria.value)),
-            "SubcategoriaMP"
-          ).filter(Boolean);
-          fillSelectOptional(selSubcat, subs, "Todas las subcategorías");
-          render();
-        });
+        // Listeners
+        selCategoria.addEventListener("change", ()=>{ render(); });
         selLinea.addEventListener("change", render);
-        selSubcat.addEventListener("change", render);
+        selMP.addEventListener("change", render);
 
         // Rango personalizado
         btnApplyRange?.addEventListener("click", ()=>{

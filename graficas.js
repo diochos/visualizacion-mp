@@ -189,19 +189,16 @@
       }
     });
     // === Botones export Pareto ===
-  __addExportButtons("paretoCard", {
-    onPNG: ()=> __exportCanvasPNG(document.getElementById("paretoMP"), "pareto_mp"),
-    onCSV: ()=> {
-      // Usa las mismas variables que ya tienes al renderizar:
-      // labels (MP), bars (valor de barra, %), accumRel (acumulado relativo, %)
-      const headers = ["Materia Prima", "% Merma (barra)", "% Acumulado relativo"];
-      const rows    = labels.map((mp,i)=> [mp, bars[i], accumRel[i]]);
-      __exportArrayToCSV(headers, rows, "pareto_mp");
-    }
-  });
+    __addExportButtons("paretoCard", {
+      onPNG: ()=> __exportCanvasPNG(document.getElementById("paretoMP"), "pareto_mp"),
+      onCSV: ()=> {
+        const headers = ["Materia Prima", "% Merma (barra)", "% Acumulado relativo"];
+        const rows    = labels.map((mp,i)=> [mp, bars[i], accumRel[i]]);
+        __exportArrayToCSV(headers, rows, "pareto_mp");
+      }
+    });
 
     if (meta){
-      // ej.: “Total % merma (eje izq máx): 27.14% · Modo: % Merma…”
       meta.textContent =
         `Total % merma (eje izq máx): ${sumBars.toFixed(2)}% · ` +
         ((mode==="share")
@@ -257,15 +254,13 @@
     return Math.floor(x/10)*10;
   }
 
-  
-    // En el BLOQUE DE TENDENCIA (% merma diario):
-    function ensureTrendContainer(){
-    // reutiliza la función global que ya definimos en el archivo
+  // Contenedor del trend debajo del pareto
+  function ensureTrendContainer(){
     const area = document.getElementById("chartsArea") || (function(){
-        const a = document.createElement("div"); a.id = "chartsArea";
-        const after = document.querySelector(".container > section.panel:last-of-type");
-        (after?.parentNode || document.body).insertBefore(a, after?.nextSibling || null);
-        return a;
+      const a = document.createElement("div"); a.id = "chartsArea";
+      const after = document.querySelector(".container > section.panel:last-of-type");
+      (after?.parentNode || document.body).insertBefore(a, after?.nextSibling || null);
+      return a;
     })();
 
     // si el pareto existe y está fuera, muévelo primero
@@ -274,41 +269,46 @@
 
     let card = document.getElementById("trendCard");
     if (!card){
-        card = document.createElement("section");
-        card.id = "trendCard";
-        card.className = "panel panel--chart";
-        card.innerHTML = `
+      card = document.createElement("section");
+      card.id = "trendCard";
+      card.className = "panel panel--chart";
+      card.innerHTML = `
         <header class="panel__head">
-            <div class="panel__title"><span class="dot"></span><h3>% merma diario (según filtros)</h3></div>
-            <small id="trendMeta" class="panel__meta"></small>
+          <div class="panel__title"><span class="dot"></span><h3>% merma diario (según filtros)</h3></div>
+          <small id="trendMeta" class="panel__meta"></small>
         </header>
         <div class="chart-wrap">
-            <div id="trendStatus" class="muted" style="display:none;text-align:center;padding:16px;">—</div>
-            <canvas id="trendPctMerma"></canvas>
+          <div id="trendStatus" class="muted" style="display:none;text-align:center;padding:16px;">—</div>
+          <canvas id="trendPctMerma"></canvas>
         </div>`;
-        area.appendChild(card);
+      area.appendChild(card);
     }
     return {
-        canvas: document.getElementById("trendPctMerma"),
-        status: document.getElementById("trendStatus"),
-        meta:   document.getElementById("trendMeta")
+      canvas: document.getElementById("trendPctMerma"),
+      status: document.getElementById("trendStatus"),
+      meta:   document.getElementById("trendMeta")
     };
-    }
-
-
+  }
 
   const showStatus = (el,msg)=>{ if(el){ el.textContent=msg; el.style.display="block"; } };
   const hideStatus = (el)=>{ if(el){ el.style.display="none"; } };
 
-  // Agrupa por fecha ISO -> Σ(teo), Σ(real) y calcula % merma diario
+  // Agrupa por fecha ISO -> Σ(teo), Σ(real), % merma diario y OPE(s)
   function buildDailySeries(rows){
-    const map = new Map();
+    const map = new Map(); // fecha -> { teo, real, opes:Set }
     for (const r of rows){
       const d = r.FechaISO;
       if (!d) continue;
-      const acc = map.get(d) || { teo:0, real:0 };
+      const acc = map.get(d) || { teo:0, real:0, opes: new Set() };
       acc.teo  += Number(r.CantidadTeorica || 0);
       acc.real += Number(r.CantidadReal   || 0);
+
+      // Trata de leer el código de producción desde varios nombres posibles
+      const op =
+        r.Produccion ?? r["Producción"] ?? r.OP ?? r.Op ??
+        r.Orden ?? r["Orden Producción"] ?? r.OrdenProduccion ?? "";
+      if (op) acc.opes.add(String(op).trim());
+
       map.set(d, acc);
     }
     const dates  = [...map.keys()].sort();
@@ -318,7 +318,9 @@
       const merma = real - teo;
       return real > 0 ? +(merma / real * 100).toFixed(2) : 0;
     });
-    return { dates, labels, pct };
+    // ⬇️ devuelve array de OPEs (no string con comas)
+    const opes   = dates.map(iso => [...(map.get(iso).opes || [])]);
+    return { dates, labels, pct, opes };
   }
 
   function drawTrend(detail){
@@ -333,7 +335,8 @@
         return;
       }
 
-      const { dates, labels, pct } = buildDailySeries(rows);
+      const { dates, labels, pct, opes } = buildDailySeries(rows);
+
       if (!dates.length){
         if (trendChart) { trendChart.destroy(); trendChart = null; }
         showStatus(status, "Gráfica sin datos");
@@ -345,7 +348,7 @@
       const ctx       = canvas.getContext("2d");
       const lineColor = getVar("--c-brand-300")   || "#FFA366";
       const metaColor = getVar("--c-success-400") || "#7bd88f";
-      const zeroColor = getVar("--c-success-400") || "#d86666ff";
+      const zeroColor = getVar("--c-danger-400")  || "#ff6b6b";
       const gridColor = "rgba(255,255,255,.08)";
       const tickColor = getVar("--c-text-dim")    || "#cfd3da";
 
@@ -365,7 +368,7 @@
           labels,
           datasets: [
             {
-              label: "% Merma Diario",
+              label: "Merma",
               data: pct,
               borderColor: lineColor,
               backgroundColor: lineColor,
@@ -376,7 +379,7 @@
               order: 1
             },
             {
-              label: "Meta 2%",
+              label: "Meta",
               data: metaLine,
               borderColor: metaColor,
               borderDash: [6,6],
@@ -413,7 +416,20 @@
               bodyColor: "#fff",
               callbacks: {
                 title: (items)=> dates[items[0].dataIndex] || "",
-                label: (ctx)=> `% merma: ${ctx.parsed.y.toFixed(2)}%`
+                label: (ctx)=>{
+                  const y = ctx.parsed.y;
+                  const lab = ctx.dataset.label || "";
+                  if (lab.includes("Merma")) return `Merma: ${y.toFixed(2)}%`;
+                  if (lab.includes("Meta"))  return `Meta: 2.00%`;
+                  if (lab.includes("Cero"))  return `Cero: 0.00%`;
+                  return `${lab}: ${y?.toFixed?.(2) ?? y}%`;
+                },
+                afterBody: (items)=>{
+                  if (!items?.length) return [];
+                  const idx = items[0].dataIndex;
+                  const arr = Array.isArray(opes?.[idx]) ? opes[idx] : [];
+                  return arr.length ? ["OPE(s):", ...arr.map(c => `• ${c}`)] : [];
+                }
               }
             }
           },
@@ -436,16 +452,18 @@
         }
       });
 
-      __addExportButtons("trendCard", {
-      onPNG: ()=> __exportCanvasPNG(document.getElementById("trendPctMerma"), "trend_%merma"),
-      onCSV: ()=> {
-        // tienes `dates` y `pct` calculados en buildDailySeries(...)
-        const headers = ["Fecha", "% merma"];
-        const rows = dates.map((d,i)=> [d, pct[i]]);
-        __exportArrayToCSV(headers, rows, "trend_%merma");
-      }
-    });
+      // Guardar datos para menú contextual
+      trendChart.$ctxData = { dates, opes, pct };
+      attachContextMenu(trendChart);
 
+      __addExportButtons("trendCard", {
+        onPNG: ()=> __exportCanvasPNG(document.getElementById("trendPctMerma"), "trend_%merma"),
+        onCSV: ()=> {
+          const headers = ["Fecha", "% merma"];
+          const rows = dates.map((d,i)=> [d, pct[i]]);
+          __exportArrayToCSV(headers, rows, "trend_%merma");
+        }
+      });
 
       if (meta){
         const first = dates[0], last = dates[dates.length-1];
@@ -456,6 +474,89 @@
       if (trendChart) { trendChart.destroy(); trendChart = null; }
       showStatus(status, "Error al generar la gráfica");
       if (meta) meta.textContent = "";
+    }
+  }
+
+  // ======= Menú contextual (clic derecho) con OPE(s) =======
+  function attachContextMenu(chart){
+    const id = "chartCtxMenu";
+    let menu = document.getElementById(id);
+    if (!menu){
+      // crear contenedor
+      menu = document.createElement("div");
+      menu.id = id;
+      menu.className = "ctxmenu hidden";
+      document.body.appendChild(menu);
+      // estilos mínimos
+      const style = document.createElement("style");
+      style.textContent = `
+        .ctxmenu{position:fixed;z-index:9999;background:#111;color:#fff;border:1px solid #333;
+                 border-radius:10px;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,.35);
+                 padding:6px; user-select:none}
+        .ctxmenu.hidden{display:none}
+        .ctxmenu__title{font-weight:600;padding:8px 12px;border-bottom:1px solid #2a2a2a;margin-bottom:4px}
+        .ctxmenu__item{display:block;width:100%;text-align:left;background:transparent;border:0;color:#fff;
+                       padding:10px 12px;cursor:pointer;font:inherit}
+        .ctxmenu__item:hover{background:rgba(255,255,255,.08)}
+        .ctxmenu__empty{opacity:.7;padding:10px 12px}
+      `;
+      document.head.appendChild(style);
+    }
+
+    const hideMenu = ()=> menu.classList.add("hidden");
+    document.addEventListener("click", (e)=>{ if (!menu.contains(e.target)) hideMenu(); });
+    document.addEventListener("keydown", (e)=>{ if (e.key === "Escape") hideMenu(); });
+
+    const canvas = chart.canvas;
+    if (!canvas) return;
+    canvas.__ctxChart = chart; // 👈 SIEMPRE actualizar al chart más reciente
+
+    // abrir con clic derecho
+    if (!canvas.__ctxBound){
+      canvas.addEventListener("contextmenu", (ev)=>{
+        ev.preventDefault();
+        const ch = ev.currentTarget.__ctxChart;  // 👈 usa el chart vigente
+        if (!ch) return;
+
+        const hits = ch.getElementsAtEventForMode(ev, "nearest", { intersect: true }, true);
+        if (!hits.length) { menu.classList.add("hidden"); return; }
+
+        ch.setActiveElements(hits);
+        ch.tooltip?.setActiveElements?.(hits, { x: ev.clientX, y: ev.clientY });
+        ch.update();
+
+        const idx = hits[0].index;
+        const { dates, opes } = ch.$ctxData || {};
+        const ops = Array.isArray(opes?.[idx]) ? opes[idx] : [];
+
+        let html = `<div class="ctxmenu__title">OPE(s) — ${dates?.[idx] || ""}</div>`;
+        if (!ops.length){
+          html += `<div class="ctxmenu__empty">Sin OPE registradas</div>`;
+        } else {
+          html += ops.map(op => `<button class="ctxmenu__item" data-ope="${op}">${op}</button>`).join("");
+        }
+        menu.innerHTML = html;
+        menu.style.left = ev.clientX + "px";
+        menu.style.top  = ev.clientY + "px";
+        menu.classList.remove("hidden");
+      });
+      canvas.__ctxBound = true;
+    }
+
+    // navegación al dar clic en una OPE
+    if (!menu.__ctxBound){
+      menu.addEventListener("click", (e)=>{
+        const btn = e.target.closest('.ctxmenu__item[data-ope]');
+        if (!btn) return;
+        const ope = btn.dataset.ope;
+        // 🚀 Página de detalle (placeholder):
+        // antes: location.href = `detalle-ope.html?ope=${encodeURIComponent(ope)}`;
+        window.open(`detalle-ope.html?ope=${encodeURIComponent(ope)}`, "_blank", "noopener");
+
+        
+        hideMenu();
+      });
+      menu.__ctxBound = true;
     }
   }
 
@@ -497,7 +598,6 @@
     const exp = Math.floor(Math.log10(x));
     const base = Math.pow(10, Math.max(exp-1,0));
     const scaled = Math.ceil(x / base);
-    // escala a 1,2,5,10…
     const steps = [1,2,5,10,20,50,100];
     const step = steps.find(s => s >= scaled) ?? scaled;
     return step * base;
@@ -537,153 +637,105 @@
   };
   const trunc = (s,n)=> (s||"").length>n ? (s.slice(0,n-1)+"…") : (s||"");
 
-  // costo por fila (robusto a nombres alternos)
-  function getCostoMerma(r){
-    let v = Number(r.CostoMerma ?? r.Costo_Merma ?? r.Costo ?? 0);
-    if (!isFinite(v) || v===0){
-      const real = Number(r.CantidadReal ?? r.Real ?? 0);
-      const teo  = Number(r.CantidadTeorica ?? r.Teorica ?? 0);
-      const unit = Number(r.CostoUnitario ?? r.Costo_Unitario ?? r.CostoKg ?? 0);
-      const merma = real - teo;
-      if (isFinite(unit) && unit !== 0) v = merma * unit;
-      else if (!isFinite(v)) v = 0;
-    }
-    return v;
-  }
-
-    // === util: zona única para TODAS las gráficas ===
-    function ensureChartsArea(){
+  // === util: zona única para TODAS las gráficas ===
+  function ensureChartsArea(){
     let area = document.getElementById("chartsArea");
     if (!area){
-        area = document.createElement("div");
-        area.id = "chartsArea";
-        // colócalo después del último <section class="panel"> del HTML (tabla)
-        const after = document.querySelector(".container > section.panel:last-of-type");
-        (after?.parentNode || document.body).insertBefore(area, after?.nextSibling || null);
+      area = document.createElement("div");
+      area.id = "chartsArea";
+      // colócalo después del último <section class="panel"> del HTML (tabla)
+      const after = document.querySelector(".container > section.panel:last-of-type");
+      (after?.parentNode || document.body).insertBefore(area, after?.nextSibling || null);
     }
     return area;
+  }
+
+  // Orden canónico: Pareto → Trend → Grid financiero
+  function normalizeChartsOrder(){
+    const area   = ensureChartsArea();
+    const pareto = document.getElementById("paretoCard");
+    const trend  = document.getElementById("trendCard");
+    const grid   = document.getElementById("financeGrid");
+    if (pareto) area.appendChild(pareto);
+    if (trend)  area.appendChild(trend);
+    if (grid)   area.appendChild(grid);
+  }
+
+  // === Banner global "Generando gráficas…" ===
+  let _loaderUseCount = 0, _loaderHideTimer = null;
+
+  function ensureChartsLoader(){
+    const area = ensureChartsArea();
+    let b = document.getElementById("chartsLoader");
+    if (!b){
+      b = document.createElement("div");
+      b.id = "chartsLoader";
+      b.innerHTML = `<div class="box"><span class="spin"></span><span class="title">Generando gráficas…</span></div>`;
+      area.parentNode.insertBefore(b, area);
     }
-    
+    return b;
+  }
 
-    // === 👉 PÉGALA AQUÍ: después de ensureChartsArea y antes de ensureFinanceGrid
-    function normalizeChartsOrder(){
-        const area   = ensureChartsArea();
-        const pareto = document.getElementById("paretoCard");
-        const trend  = document.getElementById("trendCard");
-        const grid   = document.getElementById("financeGrid");
-
-        // appendChild mueve el nodo al final; así fijamos el orden deseado
-        if (pareto) area.appendChild(pareto); // 1) Pareto
-        if (trend)  area.appendChild(trend);  // 2) % merma diario (trend)
-        if (grid)   area.appendChild(grid);   // 3) Grid de paneles financieros
+  function showChartsLoader(){
+    const b = ensureChartsLoader();
+    _loaderUseCount++;
+    clearTimeout(_loaderHideTimer);
+    b.classList.add("is-active");
+  }
+  function hideChartsLoader(){
+    _loaderUseCount = Math.max(0, _loaderUseCount - 1);
+    if (_loaderUseCount === 0){
+      const b = ensureChartsLoader();
+      _loaderHideTimer = setTimeout(()=> b.classList.remove("is-active"), 250);
     }
-        
-    // === util: zona única para TODAS las gráficas ===
-    function ensureChartsArea(){
-        let area = document.getElementById("chartsArea");
-        if (!area){
-            area = document.createElement("div");
-            area.id = "chartsArea";
-            const after = document.querySelector(".container > section.panel:last-of-type");
-            (after?.parentNode || document.body).insertBefore(area, after?.nextSibling || null);
-        }
-        return area;
-    }
+  }
 
-    // === Banner global "Generando gráficas…" ===
-        let _loaderUseCount = 0, _loaderHideTimer = null;
+  // === colgar SIEMPRE el grid en el mismo sitio
+  function ensureFinanceGrid(){
+    const area = ensureChartsArea();
 
-        function ensureChartsLoader(){
-        const area = ensureChartsArea(); // ya la tienes definida
-        let b = document.getElementById("chartsLoader");
-        if (!b){
-            b = document.createElement("div");
-            b.id = "chartsLoader";
-            b.innerHTML = `<div class="box"><span class="spin"></span><span class="title">Generando gráficas…</span></div>`;
-
-            // Lo insertamos ANTES del área de gráficas para que quede "arriba de todo" jeje
-            area.parentNode.insertBefore(b, area);
-        }
-        return b;
-        }
-
-        function showChartsLoader(){
-        const b = ensureChartsLoader();
-        _loaderUseCount++;
-        clearTimeout(_loaderHideTimer);
-        b.classList.add("is-active");
-        }
-        function hideChartsLoader(){
-        // damos un pequeño margen para evitar parpadeos si hay renders encadenados
-        _loaderUseCount = Math.max(0, _loaderUseCount - 1);
-        if (_loaderUseCount === 0){
-            const b = ensureChartsLoader();
-            _loaderHideTimer = setTimeout(()=> b.classList.remove("is-active"), 250);
-        }
-        }
-
-
-    
-    function normalizeChartsOrder(){
-        const area   = ensureChartsArea();
-        const pareto = document.getElementById("paretoCard");
-        const trend  = document.getElementById("trendCard");
-        const grid   = document.getElementById("financeGrid");
-
-        // appendChild mueve el nodo al final; así fijamos el orden deseado
-        if (pareto) area.appendChild(pareto); // 1) Pareto
-        if (trend)  area.appendChild(trend);  // 2) % merma diario (trend)
-        if (grid)   area.appendChild(grid);   // 3) Grid de paneles financieros
+    let g = document.getElementById("financeGrid");
+    if (!g){
+      g = document.createElement("div");
+      g.id = "financeGrid";
+      g.className = "grid grid--2";
+      area.appendChild(g);
     }
 
-    // === colgar SIEMPRE el grid en el mismo sitio
-    function ensureFinanceGrid(){
-        const area = ensureChartsArea();
+    normalizeChartsOrder();
+    return g;
+  }
 
-        let g = document.getElementById("financeGrid");
-        if (!g){
-            g = document.createElement("div");
-            g.id = "financeGrid";
-            g.className = "grid grid--2";
-            area.appendChild(g);
-        }
-
-        // 🔧 asegura el orden cada vez que toquemos el grid
-        normalizeChartsOrder();
-        return g;
-    }
-
-    // crea panel genérico dentro de la cuadrícula financiera
-    function ensureCard(id, title){
+  // crea panel genérico dentro de la cuadrícula financiera
+  function ensureCard(id, title){
     let card = document.getElementById(id);
     if (!card){
-        card = document.createElement("section");
-        card.id = id;
-        card.className = "panel panel--chart";
-        card.innerHTML = `
+      card = document.createElement("section");
+      card.id = id;
+      card.className = "panel panel--chart";
+      card.innerHTML = `
         <header class="panel__head">
-            <div class="panel__title">
+          <div class="panel__title">
             <span class="dot"></span>
             <h3>${title}</h3>
-            </div>
-            <small id="${id}Meta" class="panel__meta"></small>
+          </div>
+          <small id="${id}Meta" class="panel__meta"></small>
         </header>
         <div class="chart-wrap">
-            <div id="${id}Status" class="muted" style="display:none;text-align:center;padding:16px;">—</div>
-            <canvas id="${id}Canvas"></canvas>
+          <div id="${id}Status" class="muted" style="display:none;text-align:center;padding:16px;">—</div>
+          <canvas id="${id}Canvas"></canvas>
         </div>
-        `;
-        const host = ensureFinanceGrid();
-        host.appendChild(card);
-        if (id === "riskMapCard") { card.style.gridColumn = "1 / -1"; }
+      `;
+      const host = ensureFinanceGrid();
+      host.appendChild(card);
+      if (id === "riskMapCard") { card.style.gridColumn = "1 / -1"; }
     }
     return {
-        canvas: document.getElementById(`${id}Canvas`),
-        status: document.getElementById(`${id}Status`),
-        meta:   document.getElementById(`${id}Meta`)
+      canvas: document.getElementById(`${id}Canvas`),
+      status: document.getElementById(`${id}Status`),
+      meta:   document.getElementById(`${id}Meta`)
     };
-    }
-
+  }
 
   const showStatus = (el,msg)=>{ if(el){ el.textContent=msg; el.style.display="block"; } };
   const hideStatus = (el)=>{ if(el){ el.style.display="none"; } };
@@ -762,43 +814,54 @@
         const total = vals.reduce((s,v)=>s+v,0);
         meta.textContent = `${dates[0]} → ${dates[dates.length-1]} · Total: ${fmtMXN(total)}`;
       }
+
+      __addExportButtons("costoDailyCard", {
+        onPNG: ()=> __exportCanvasPNG(document.querySelector("#costoDailyCard canvas"), "costo_diario"),
+        onCSV: ()=> {
+          const headers = ["Fecha", "Costo de merma (MXN)"];
+          const rows = dates.map((d,i)=> [d, vals[i]]);
+          __exportArrayToCSV(headers, rows, "costo_diario");
+        }
+      });
+
     }catch(err){
       console.error("[costoDaily] error:", err);
       if (costoDailyChart){ costoDailyChart.destroy(); costoDailyChart = null; }
       showStatus(status, "Error al generar la gráfica");
       if (meta) meta.textContent = "";
     }
-    __addExportButtons("costoDailyCard", {
-      onPNG: ()=> __exportCanvasPNG(document.querySelector("#costoDailyCard canvas"), "costo_diario"),
-      onCSV: ()=> {
-        // tienes dates/labels/vals
-        const headers = ["Fecha", "Costo de merma (MXN)"];
-        const rows = dates.map((d,i)=> [d, vals[i]]);
-        __exportArrayToCSV(headers, rows, "costo_diario");
-      }
-    });
-
   }
 
- 
-    // ---------- 2) Pareto de costo (MP cuando hay una sola categoría) ----------
-    function buildCostoPareto(rows){
+  // ---------- 2) Pareto de costo (MP cuando hay una sola categoría) ----------
+  function getCostoMerma(r){
+    let v = Number(r.CostoMerma ?? r.Costo_Merma ?? r.Costo ?? 0);
+    if (!isFinite(v) || v===0){
+      const real = Number(r.CantidadReal ?? r.Real ?? 0);
+      const teo  = Number(r.CantidadTeorica ?? r.Teorica ?? 0);
+      const unit = Number(r.CostoUnitario ?? r.Costo_Unitario ?? r.CostoKg ?? 0);
+      const merma = real - teo;
+      if (isFinite(unit) && unit !== 0) v = merma * unit;
+      else if (!isFinite(v)) v = 0;
+    }
+    return v;
+  }
+  function buildCostoPareto(rows){
     const cats = new Set(rows.map(r => (r.CategoriaMP ?? r.Categoria ?? "").trim()).filter(Boolean));
     const groupByMP = cats.size <= 1; // <<< clave
 
     const keyOf = (r) => groupByMP
-        ? (r.MateriaPrima ?? r.MP ?? r["Materia Prima"] ?? "SIN MATERIA")
-        : (r.CategoriaMP ?? r.Categoria ?? "SIN CATEGORÍA");
+      ? (r.MateriaPrima ?? r.MP ?? r["Materia Prima"] ?? "SIN MATERIA")
+      : (r.CategoriaMP ?? r.Categoria ?? "SIN CATEGORÍA");
 
     const map = new Map(); // clave -> costo
     for (const r of rows){
-        const k = keyOf(r);
-        map.set(k, (map.get(k)||0) + getCostoMerma(r));
+      const k = keyOf(r);
+      map.set(k, (map.get(k)||0) + getCostoMerma(r));
     }
 
     const entries = [...map.entries()]
-        .map(([k,v])=>({ label: k, costo: Number(v)||0 }))
-        .sort((a,b)=> b.costo - a.costo);
+      .map(([k,v])=>({ label: k, costo: Number(v)||0 }))
+      .sort((a,b)=> b.costo - a.costo);
 
     const MAX = 40;
     const limited = entries.slice(0, MAX);
@@ -807,166 +870,161 @@
     let acc = 0;
     const labels=[], bars=[], accum=[];
     for (const e of limited){
-        labels.push(trunc(e.label, 34));
-        bars.push(e.costo);
-        acc += e.costo;
-        accum.push(total>0 ? +(acc/total*100).toFixed(2) : 0);
+      labels.push(trunc(e.label, 34));
+      bars.push(e.costo);
+      acc += e.costo;
+      accum.push(total>0 ? +(acc/total*100).toFixed(2) : 0);
     }
     return { labels, bars, accum, total, groupByMP };
-    }
+  }
 
- 
-        
-    function drawCostoPareto(rows){
+  function drawCostoPareto(rows){
     const { canvas, status, meta } = ensureCard("costoParetoCard", "Pareto de costo de merma por Categoría");
     try{
-        if (!rows?.length){
+      if (!rows?.length){
         if (costoParetoChart){ costoParetoChart.destroy(); costoParetoChart = null; }
         showStatus(status, "Gráfica sin datos");
         if (meta) meta.textContent = "";
         return;
-        }
-        const { labels, bars, accum, total, groupByMP } = buildCostoPareto(rows);
-        if (!labels.length){
+      }
+      const { labels, bars, accum, total, groupByMP } = buildCostoPareto(rows);
+      if (!labels.length){
         if (costoParetoChart){ costoParetoChart.destroy(); costoParetoChart = null; }
         showStatus(status, "Gráfica sin datos");
         if (meta) meta.textContent = "";
         return;
-        }
+      }
 
-        // título dinámico según el nivel
-        const cardEl = document.getElementById("costoParetoCard");
-        if (cardEl){
+      // título dinámico según el nivel
+      const cardEl = document.getElementById("costoParetoCard");
+      if (cardEl){
         const h3 = cardEl.querySelector("h3");
         if (h3) h3.textContent = groupByMP
-            ? "Pareto de costo de merma por Materia Prima"
-            : "Pareto de costo de merma por Categoría";
-        }
+          ? "Pareto de costo de merma por Materia Prima"
+          : "Pareto de costo de merma por Categoría";
+      }
 
-        hideStatus(status);
-        const ctx = canvas.getContext("2d");
-        const brand = getVar("--c-brand") || "#ff8a00";
-        const grad = ctx.createLinearGradient(0,0,0,canvas.height);
-        grad.addColorStop(0, brand);
-        grad.addColorStop(1, hexA(brand, .25));
-        const barBorder = brand;
-        const lineColor = getVar("--c-brand-300") || "#FFA366";
-        const gridColor = "rgba(255,255,255,.08)";
-        const tickColor = getVar("--c-text-dim") || "#cfd3da";
-        const yLeftMax = niceCeilNum(Math.max(...bars)); // <<< usar máximo, no la suma
+      hideStatus(status);
+      const ctx = canvas.getContext("2d");
+      const brand = getVar("--c-brand") || "#ff8a00";
+      const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+      grad.addColorStop(0, brand);
+      grad.addColorStop(1, hexA(brand, .25));
+      const barBorder = brand;
+      const lineColor = getVar("--c-brand-300") || "#FFA366";
+      const gridColor = "rgba(255,255,255,.08)";
+      const tickColor = getVar("--c-text-dim") || "#cfd3da";
+      const yLeftMax = niceCeilNum(Math.max(...bars)); // máximo
 
-        if (costoParetoChart) costoParetoChart.destroy();
-        costoParetoChart = new Chart(ctx, {
+      if (costoParetoChart) costoParetoChart.destroy();
+      costoParetoChart = new Chart(ctx, {
         type: "bar",
         data: {
-            labels,
-            datasets: [
+          labels,
+          datasets: [
             {
-                type: "bar",
-                label: "Costo (MXN)",
-                data: bars,
-                backgroundColor: grad,
-                borderColor: barBorder,
-                borderWidth: 1.2,
-                borderRadius: 8,
-                yAxisID: "yBar",
-                order: 2
+              type: "bar",
+              label: "Costo (MXN)",
+              data: bars,
+              backgroundColor: grad,
+              borderColor: barBorder,
+              borderWidth: 1.2,
+              borderRadius: 8,
+              yAxisID: "yBar",
+              order: 2
             },
             {
-                type: "line",
-                label: "Acumulado (%)",
-                data: accum,
-                borderColor: lineColor,
-                backgroundColor: lineColor,
-                yAxisID: "yLine",
-                tension: 0.3,
-                pointRadius: 2,
-                pointHoverRadius: 3,
-                borderWidth: 2,
-                order: 1
+              type: "line",
+              label: "Acumulado (%)",
+              data: accum,
+              borderColor: lineColor,
+              backgroundColor: lineColor,
+              yAxisID: "yLine",
+              tension: 0.3,
+              pointRadius: 2,
+              pointHoverRadius: 3,
+              borderWidth: 2,
+              order: 1
             }
-            ]
+          ]
         },
         options: {
-            responsive: true, maintainAspectRatio: false,
-            interaction: { mode: "index", intersect: false },
-            plugins: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
             legend: { labels: { color: tickColor, usePointStyle: true, boxWidth: 10, boxHeight: 10 } },
             tooltip: {
-                backgroundColor: "rgba(0,0,0,.75)", borderColor: gridColor, borderWidth: 1,
-                titleColor: "#fff", bodyColor: "#fff",
-                callbacks: {
+              backgroundColor: "rgba(0,0,0,.75)", borderColor: gridColor, borderWidth: 1,
+              titleColor: "#fff", bodyColor: "#fff",
+              callbacks: {
                 label: (ctx)=>{
-                    const ds = ctx.dataset.label;
-                    const v  = ctx.parsed.y;
-                    return ds.includes("Costo") ? `${ds}: ${fmtMXN(v)}` : `${ds}: ${v.toFixed(2)}%`;
+                  const ds = ctx.dataset.label;
+                  const v  = ctx.parsed.y;
+                  return ds.includes("Costo") ? `${ds}: ${fmtMXN(v)}` : `${ds}: ${v.toFixed(2)}%`;
                 }
-                }
+              }
             }
-            },
-            scales: {
+          },
+          scales: {
             x: { ticks:{ color: tickColor, maxRotation:0, autoSkip:true }, grid:{ color: gridColor } },
             yBar: {
-                type:"linear", position:"left",
-                min:0, max:yLeftMax,
-                ticks:{ color: tickColor, callback:v=>fmtK(v) },
-                grid:{ color: gridColor }
+              type:"linear", position:"left",
+              min:0, max:yLeftMax,
+              ticks:{ color: tickColor, callback:v=>fmtK(v) },
+              grid:{ color: gridColor }
             },
             yLine: {
-                type:"linear", position:"right",
-                min:0, max:100,
-                ticks:{ color: tickColor, callback:v=>v+"%" },
-                grid:{ drawOnChartArea:false }
+              type:"linear", position:"right",
+              min:0, max:100,
+              ticks:{ color: tickColor, callback:v=>v+"%" },
+              grid:{ drawOnChartArea:false }
             }
-            }
+          }
         }
-        });
-        if (meta){
+      });
+      if (meta){
         meta.textContent = `Total periodo: ${fmtMXN(total)} · Top ${labels.length} · ${groupByMP ? "MP" : "categorías"}`;
-        }
+      }
     }catch(err){
-        console.error("[costoPareto] error:", err);
-        if (costoParetoChart){ costoParetoChart.destroy(); costoParetoChart = null; }
-        showStatus(status, "Error al generar la gráfica");
-        if (meta) meta.textContent = "";
+      console.error("[costoPareto] error:", err);
+      if (costoParetoChart){ costoParetoChart.destroy(); costoParetoChart = null; }
+      showStatus(status, "Error al generar la gráfica");
+      if (meta) meta.textContent = "";
     }
+  }
+
+  function buildRisk(rows){
+    const map = new Map(); // fecha -> {real, teo, costo, mp: Map}
+    for (const r of rows){
+      const d = r.FechaISO;
+      if (!d) continue;
+      const real  = Number(r.CantidadReal ?? 0);
+      const teo   = Number(r.CantidadTeorica ?? 0);
+      const costo = getCostoMerma(r);
+      const mp    = (r.MateriaPrima ?? r.MP ?? r["Materia Prima"] ?? "SIN MATERIA").toString();
+
+      const acc = map.get(d) || { real:0, teo:0, costo:0, mp: new Map() };
+      acc.real += real; acc.teo += teo; acc.costo += costo;
+      acc.mp.set(mp, (acc.mp.get(mp)||0) + costo);
+      map.set(d, acc);
     }
+    const points = [];
+    let minX = +Infinity, maxX = -Infinity, minY = +Infinity, maxY = -Infinity;
+    for (const [fecha,{real,teo,costo,mp}] of map){
+      const merma = real - teo;
+      const pct   = real>0 ? (merma/real*100) : 0;
 
+      // MPs ordenadas por costo desc (nombres completos)
+      const mps = [...mp.entries()].sort((a,b)=>b[1]-a[1]).map(([name])=>name);
 
-    function buildRisk(rows){
-        const map = new Map(); // fecha -> {real, teo, costo, mp: Map}
-        for (const r of rows){
-            const d = r.FechaISO;
-            if (!d) continue;
-            const real  = Number(r.CantidadReal ?? 0);
-            const teo   = Number(r.CantidadTeorica ?? 0);
-            const costo = getCostoMerma(r);
-            const mp    = (r.MateriaPrima ?? r.MP ?? r["Materia Prima"] ?? "SIN MATERIA").toString();
-
-            const acc = map.get(d) || { real:0, teo:0, costo:0, mp: new Map() };
-            acc.real += real; acc.teo += teo; acc.costo += costo;
-            acc.mp.set(mp, (acc.mp.get(mp)||0) + costo);
-            map.set(d, acc);
-        }
-        const points = [];
-        let minX = +Infinity, maxX = -Infinity, minY = +Infinity, maxY = -Infinity;
-        for (const [fecha,{real,teo,costo,mp}] of map){
-            const merma = real - teo;
-            const pct   = real>0 ? (merma/real*100) : 0;
-
-            // MPs ordenadas por costo desc (nombres completos)
-            const mps = [...mp.entries()].sort((a,b)=>b[1]-a[1]).map(([name])=>name);
-
-            points.push({ fecha, pct, costo, vol: real, mps });
-            if (pct   < minX) minX = pct;
-            if (pct   > maxX) maxX = pct;
-            if (costo < minY) minY = costo;
-            if (costo > maxY) maxY = costo;
-        }
-        return { points, minX, maxX, minY, maxY };
-        }
-        
-            
+      points.push({ fecha, pct, costo, vol: real, mps });
+      if (pct   < minX) minX = pct;
+      if (pct   > maxX) maxX = pct;
+      if (costo < minY) minY = costo;
+      if (costo > maxY) maxY = costo;
+    }
+    return { points, minX, maxX, minY, maxY };
+  }
 
   function drawRisk(rows){
     const { canvas, status, meta } = ensureCard("riskMapCard", "Mapa de riesgo: % merma vs costo (burbuja)");
@@ -1001,16 +1059,16 @@
       const xMin = niceFloorPct(Math.min(minX, xMeta));
       const xMax = niceCeilPct (Math.max(maxX, xMeta));
       const yMax = niceCeilNum (Math.max(maxY, yP80));
-      const yMin = 0; // costos no negativos (si hubiera negativos, cámbialo a Math.min(0, minY))
+      const yMin = 0; // costos no negativos
 
       const dataBubbles = points.map(p => ({
-            x: p.pct,
-            y: p.costo,
-            r: rScale(p.vol),
-            _fecha: p.fecha,
-            _mps: p.mps,     // << nombres de MP del día (ordenadas por costo)
-            _vol: p.vol      // << volumen para no depender del índice externo
-        }));
+        x: p.pct,
+        y: p.costo,
+        r: rScale(p.vol),
+        _fecha: p.fecha,
+        _mps: p.mps,     // nombres de MP del día (ordenadas por costo)
+        _vol: p.vol
+      }));
 
       const ctx = canvas.getContext("2d");
       const pointColor = getVar("--c-brand-300") || "#FFA366";
@@ -1060,32 +1118,32 @@
           plugins: {
             legend: { labels: { color: tickColor, usePointStyle: true, boxWidth: 10, boxHeight: 10 } },
             tooltip: {
-                backgroundColor: "rgba(0,0,0,.75)", borderColor: gridColor, borderWidth: 1,
-                titleColor: "#fff", bodyColor: "#fff",
-                callbacks: {
-                    title: (items)=> (items[0].raw?._fecha) || items[0].raw?.fecha || "",
-                    label: (ctx) => {
-                        if (ctx.dataset.label === "Días"){
-                            const p = ctx.raw;
-                            const lines = [
-                            `% merma: ${p.x.toFixed(2)}%`,
-                            `Costo: ${fmtMXN(p.y)}`,
-                            `Volumen: ${fmtK(p._vol || 0)}`
-                            ];
-                            const list = (p._mps || []).slice(0, 8); // muestra hasta 8 MPs
-                            if (list.length){
-                            lines.push("Materia prima:");
-                            for (const name of list) lines.push(`• ${name}`);
-                            }
-                            return lines;
-                        }
-                        const lab = ctx.dataset.label || "";
-                        if (lab.includes("Meta")) return "x = 2%";
-                        if (lab.includes("P80"))  return `y = ${fmtMXN(yP80)}`;
-                        return "";
-                        }
+              backgroundColor: "rgba(0,0,0,.75)", borderColor: gridColor, borderWidth: 1,
+              titleColor: "#fff", bodyColor: "#fff",
+              callbacks: {
+                title: (items)=> (items[0].raw?._fecha) || items[0].raw?.fecha || "",
+                label: (ctx) => {
+                  if (ctx.dataset.label === "Días"){
+                    const p = ctx.raw;
+                    const lines = [
+                      `% merma: ${p.x.toFixed(2)}%`,
+                      `Costo: ${fmtMXN(p.y)}`,
+                      `Volumen: ${fmtK(p._vol || 0)}`
+                    ];
+                    const list = (p._mps || []).slice(0, 8); // muestra hasta 8 MPs
+                    if (list.length){
+                      lines.push("Materia prima:");
+                      for (const name of list) lines.push(`• ${name}`);
                     }
+                    return lines;
+                  }
+                  const lab = ctx.dataset.label || "";
+                  if (lab.includes("Meta")) return "x = 2%";
+                  if (lab.includes("P80"))  return `y = ${fmtMXN(yP80)}`;
+                  return "";
                 }
+              }
+            }
 
           },
           scales: {
@@ -1120,30 +1178,30 @@
 
   // ---------- orquestación ----------
   function drawAll(detail){
-    showChartsLoader();    
+    showChartsLoader();
     const rows = detail?.rows || [];
     drawCostoDaily(rows);
     drawCostoPareto(rows);
     drawRisk(rows);
-    normalizeChartsOrder(); // 👈 aquí
-     hideChartsLoader();    
-    }
+    normalizeChartsOrder();
+    hideChartsLoader();
+  }
 
-    // render en cambios de filtros
-    window.addEventListener("vmps:update", (e)=>{
-        showChartsLoader();
-        drawAll(e.detail);
-        hideChartsLoader();
-    });
-    // primer pintado si ya hay estado
-    if (window.VMPS?.getFilteredRows){
-        showChartsLoader();
-        drawAll({ rows: window.VMPS.getFilteredRows() });
-        hideChartsLoader();
-    }
-
+  // render en cambios de filtros
+  window.addEventListener("vmps:update", (e)=>{
+    showChartsLoader();
+    drawAll(e.detail);
+    hideChartsLoader();
+  });
+  // primer pintado si ya hay estado
+  if (window.VMPS?.getFilteredRows){
+    showChartsLoader();
+    drawAll({ rows: window.VMPS.getFilteredRows() });
+    hideChartsLoader();
+  }
 
 })();
+
 
 // --- EXPORT HELPERS (PNG / CSV) ---
 function __exportCanvasPNG(canvas, filenameBase = "grafica") {

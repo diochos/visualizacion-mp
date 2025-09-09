@@ -41,6 +41,7 @@
       <a class="tab" href="index.html">Concentrado</a>
       <a class="tab tab--active" href="#consumo-por-linea-html" data-view="consumo-por-linea-html">Consumo por línea</a>
       <a class="tab" href="#linea-vs-linea-html" data-view="linea-vs-linea-html">Comparativa</a>
+      <a class="tab" href="ordenes.html">Ordenes</a>
     </nav>
 
     <!-- ===== VISTA 1: Consumo por línea ===== -->
@@ -203,5 +204,44 @@
     goFromHash();
   })();
   </script>
+  
+  <!-- Menú contextual para la gráfica -->
+  <div id="chartCtxMenu" class="ctxmenu hidden"></div>
+
+  <style>
+    .ctxmenu{position:fixed;z-index:9999;background:#111;color:#fff;border:1px solid #333;
+            border-radius:10px;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,.35);
+            padding:6px; user-select:none}
+    .ctxmenu.hidden{display:none}
+    .ctxmenu__title{font-weight:600;padding:8px 12px;border-bottom:1px solid #2a2a2a;margin-bottom:4px}
+    .ctxmenu__item{display:block;width:100%;text-align:left;background:transparent;border:0;color:#fff;
+                  padding:10px 12px;cursor:pointer;font:inherit}
+    .ctxmenu__item:hover{background:rgba(255,255,255,.08)}
+    .ctxmenu__empty{opacity:.7;padding:10px 12px}
+  </style>
+
+  <script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const tag = document.getElementById('fileTag');
+  // pinta el nombre si ya había dataset guardado
+  try {
+    const ds = await VMPS.loadDataset();
+    if (tag && ds?.filename) tag.textContent = ds.filename;
+  } catch {}
+  // si otra pestaña guarda un dataset nuevo, refleja el nombre
+  try {
+    const ch = new BroadcastChannel('vmps');
+    ch.onmessage = async (e) => {
+      if (e?.data?.type === 'dataset-ready') {
+        const ds = await VMPS.loadDataset();
+        if (tag && ds?.filename) tag.textContent = ds.filename;
+      }
+    };
+  } catch {}
+});
+</script>
+
+
+
 </body>
 </html>

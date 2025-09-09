@@ -61,6 +61,8 @@
         <th>Nombre de artículo</th>
         <th>Fecha</th>
         <th>Producción</th>
+        <th>Cajas Producidas</th> <!-- NUEVO -->
+
         <th>Cantidad Teórica</th>
         <th>Cantidad Real</th>
         <th>Merma</th>
@@ -73,7 +75,7 @@
       </tr>
     </thead>
     <tbody>
-      <tr><td colspan="15" class="muted">Cargue un archivo para ver datos…</td></tr>
+      <tr><td colspan="16" class="muted">Cargue un archivo para ver datos…</td></tr>
     </tbody>
 
   </table>
@@ -113,7 +115,7 @@
       language: { url: "https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-MX.json" },
       dom: "lfrtip",
       columnDefs: [
-        { targets: [7,8,9,10,11,12], className: "dt-right" }, // numéricos
+        { targets: [7,8,9,10,11,12,13], className: "dt-center" }, // numéricos
         { targets: [5], className: "dt-center" }              // fecha
       ],
       initComplete: function(){

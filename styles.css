@@ -701,3 +701,7 @@ select {
   border-radius:10px; background:rgba(255,138,0,.06); color:#fff;
 }
 .crit-sum b{ color:#fff; }
+
+
+#chartsLoader { pointer-events: none; }
+#chartsLoader.is-active { pointer-events: auto; }
