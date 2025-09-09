@@ -1,0 +1,97 @@
+/* ===== Upload Buttons (aislado, prefijo .upl-) ===== */
+:root{
+  --upl-brand:  var(--c-brand, #FF6D00);
+  --upl-brand-700: var(--c-brand-700, #E85F00);
+  --upl-text:   var(--c-text, #F5F5F7);
+  --upl-bg:     var(--c-panel, #17171A);
+  --upl-bd:     var(--c-border, #2A2A2F);
+  --upl-danger: var(--c-bad, #EF4444);
+  --upl-danger-700: #C62828;
+  --upl-ring:   rgba(255,109,0,.35);
+  --upl-green: #44ef77;
+  --upl-green2: #41a760;
+}
+
+/* Contenedor opcional para agrupar/centrar */
+.upl-actions{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
+
+/* Botón base */
+.upl-cta, .upl-cta2{
+  --_bg: var(--upl-brand);
+  --_bg2: var(--upl-brand-700);
+  --_fg: #0B0B0E;
+  --_bd: transparent;
+
+  display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+  padding:.7rem 1.1rem;
+  border:1px solid var(--_bd);
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--_bg) 0%, var(--_bg2) 100%);
+  color: var(--_fg);
+  font-weight: 700; line-height:1; text-decoration:none; white-space:nowrap;
+  box-shadow: 0 10px 30px rgba(255,109,0,.18);
+  transition: transform .06s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+  cursor:pointer; user-select:none;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-size: 17px;
+  color: #F5F5F7;
+}
+.upl-cta:hover{ transform: translateY(-1px); box-shadow: 0 14px 34px rgba(255,109,0,.26); }
+.upl-cta:active{ transform: translateY(0); box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+.upl-cta:focus-visible{ outline:2px solid var(--upl-brand); outline-offset:2px; box-shadow: 0 0 0 4px var(--upl-ring); }
+.upl-cta[disabled], .upl-cta:disabled{ opacity:.6; cursor:not-allowed; box-shadow:none; }
+
+.upl-cta2{
+   
+    background: linear-gradient(180deg, var(--upl-green) 0%, var(--upl-green2) 100%);
+    box-shadow: 0 10px 30px rgba(0, 255, 0, 0.18);
+}
+
+
+
+
+/* Tamaños */
+.upl-cta--sm{ padding:.5rem .9rem; font-size:.92rem; }
+.upl-cta--lg{ padding:.85rem 1.25rem; font-size:1.05rem; }
+
+/* Variante Ghost (borde, fondo oscuro) — ideal para “Ir a gráficas” */
+.upl-ghost{
+  --_bg: var(--upl-bg); --_bg2: var(--upl-bg); --_fg: var(--upl-text); --_bd: var(--upl-bd);
+  background: var(--upl-bg);
+  color: var(--upl-text);
+  box-shadow: none;
+}
+.upl-ghost:hover{ background:#1F2024; border-color:#3A3A41; }
+.upl-ghost:active{ background:#191A1E; }
+
+/* Variante Danger (Eliminar) */
+.upl-danger{
+  --_bg: var(--upl-danger); --_bg2: var(--upl-danger-700); --_fg: #fff; --_bd: transparent;
+  box-shadow: 0 10px 30px rgba(239,68,68,.22);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-size: 17px;
+}
+.upl-danger:hover{ box-shadow: 0 14px 34px rgba(239,68,68,.32); }
+
+/* Danger Ghost (más discreto) */
+.upl-danger.upl-ghost{
+  --_bg: transparent; --_bg2: transparent; --_fg: #ffd7d7; --_bd: rgba(239,68,68,.55);
+  background: transparent; color:#ffd7d7; border-color: rgba(239,68,68,.55);
+}
+.upl-danger.upl-ghost:hover{ background: rgba(239,68,68,.10); border-color: rgba(239,68,68,.75); }
+
+/* Íconos opcionales dentro del botón */
+.upl-cta .upl-ico{ width:1.1em; height:1.1em; display:inline-block; }
+
+/* Input file escondido (para usar <label> como botón) */
+label.upl-file{ cursor:pointer; }
+label.upl-file > input[type="file"]{ display:none; }
+
+/* Estado “cargando” opcional dentro del botón */
+.upl-cta.is-loading{ pointer-events:none; }
+.upl-cta.is-loading::before{
+  content:""; width:1em; height:1em; border-radius:50%;
+  border:2px solid rgba(255,255,255,.35); border-top-color:#fff;
+  animation: uplspin .8s linear infinite;
+}
+@keyframes uplspin{ to{ transform: rotate(360deg); } }

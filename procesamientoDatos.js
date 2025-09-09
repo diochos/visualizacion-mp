@@ -1,4 +1,5 @@
-// procesamientoDatos.js — parser XLSX, normalización y persistencia en IndexedDB (con fallback a sessionStorage)
+// procesamientoDatos.js — Parser XLSX, normalización y persistencia en IndexedDB (sin backend)
+// Versión: IDB1-skip-rerender
 
 /* ================== CATALOGACIÓN DE MATERIA PRIMA ================== */
 const normalizeMP = (s) => (s ?? "")
@@ -28,7 +29,6 @@ function classifyCategoriaMP(text) {
   for (const rule of CATS) if (rule.re.test(t)) return rule.name;
   return "Otros";
 }
-
 function attachCategoriaColumns(row) {
   const materia = row?.MateriaPrima ?? row?.ArticuloDescripcion ?? "";
   const categoria = classifyCategoriaMP(materia);
@@ -105,7 +105,7 @@ function isoToHumanMX(iso){
 
 /* ================== INDEXEDDB (sin backend) ================== */
 const IDB_NAME = "vmps_db_v1";
-const IDB_VERSION = 1; // si cambias schema, sube versión
+const IDB_VERSION = 1;
 let __idbDB = null;
 
 function idbOpen(){
@@ -138,7 +138,7 @@ function idbGet(store, key){
   }));
 }
 
-/* ============ Fallback: sessionStorage (compat mientras migras) ============ */
+/* ============ Fallback: sessionStorage (compat) ============ */
 const SKEY_META   = "vmps_meta_v1";
 const SKEY_ROWS   = "vmps_rows_v1";
 const SKEY_CAJAS  = "vmps_cajasByOpe_v1";
@@ -279,13 +279,12 @@ async function parseArrayBufferToRows(ab){
   // Ordenar por fecha asc
   out.sort((a,b)=> (a.FechaISO||"") < (b.FechaISO||"") ? -1 : ((a.FechaISO||"") > (b.FechaISO||"") ? 1 : 0));
 
-  return out; // ← compat: sigue regresando rows
+  return out;
 }
 
 /* ================== DATASET: construir y persistir ================== */
 function buildDataset(rows, meta = {}){
   const opsDisponibles = Array.from(new Set(rows.map(r => r.OPE).filter(Boolean)));
-  // Extraer mapa de cajas por OPE (preferir máximo visto por OPE)
   const agg = new Map();
   for (const r of rows){
     if (!r.OPE) continue;
@@ -300,16 +299,14 @@ function buildDataset(rows, meta = {}){
     cajasByOpe,
     opsDisponibles,
     filename: meta.filename || "",
-    builtAt: Date.now(),
+    builtAt: Date.now(), // ← versión del dataset (para evitar re-render al volver)
   };
 }
 
 async function saveDatasetIndexedDB(dataset, fileBlob){
-  // dataset: { rows, cajasByOpe, opsDisponibles, filename?, builtAt? }
   if (!dataset || !Array.isArray(dataset.rows)) throw new Error("Dataset inválido");
   await idbPut("dataset", "current", dataset);
   if (fileBlob instanceof Blob) await idbPut("blob", "xlsx", fileBlob);
-  // Notificar (si alguna otra pestaña escucha)
   try { new BroadcastChannel("vmps").postMessage({ type:"dataset-ready" }); } catch(_){}
   return true;
 }
@@ -322,7 +319,7 @@ async function loadDatasetIndexedDB(){
 /* ================== API PÚBLICA (window.VMPS) ================== */
 window.VMPS = window.VMPS || {};
 
-VMPS.parseArrayBufferToRows = parseArrayBufferToRows; // compat
+VMPS.parseArrayBufferToRows = parseArrayBufferToRows;
 
 VMPS.parseArrayBufferToDataset = async function(ab, meta = {}){
   const rows = await parseArrayBufferToRows(ab);
@@ -330,7 +327,6 @@ VMPS.parseArrayBufferToDataset = async function(ab, meta = {}){
 };
 
 VMPS.saveDataset = async function(dataset, fileBlob){
-  // Guarda en IndexedDB + fallback a sessionStorage
   try {
     await saveDatasetIndexedDB(dataset, fileBlob);
   } catch(e){
@@ -340,7 +336,6 @@ VMPS.saveDataset = async function(dataset, fileBlob){
 };
 
 VMPS.loadDataset = async function(){
-  // Intenta IDB → fallback session
   let ds = null;
   try { ds = await loadDatasetIndexedDB(); } catch(_){}
   if (ds) return ds;
@@ -382,33 +377,57 @@ VMPS.saveFromFileInputEvent = async function(file){
   return dataset;
 };
 
-/* ================== UI OPCIONAL (solo si hay #fileInput) ================== */
+/* ================== UI OPCIONAL PARA index.html ================== */
 document.addEventListener("DOMContentLoaded", async () => {
   const fileInput  = document.getElementById("fileInput");
   const estadoTag  = document.querySelector(".tag strong");
   const loader     = document.getElementById("loader");
   const showLoader = (on) => { if (loader) loader.style.display = on ? "grid" : "none"; };
 
-  // Si la página NO tiene input, no hacemos UI (el módulo queda “pasivo”)
+  // Si la página no es index (no hay input), salimos; el módulo queda pasivo
   if (!fileInput) return;
 
-  // Intentar restaurar dataset (sirve para recarga de página)
+  // Botón "Mostrar tabla" (lazy render) — lo creamos si hay tabla en el DOM
+  let btnMostrar = document.getElementById("btnMostrarTabla");
+  const maybeAttachShowButton = () => {
+    const hasTable = document.querySelector("#tablaMP tbody");
+    if (!hasTable) return;
+    if (!btnMostrar) {
+      btnMostrar = document.createElement("button");
+      btnMostrar.id = "btnMostrarTabla";
+      btnMostrar.className = "btn btn--ghost";
+      btnMostrar.textContent = "Mostrar tabla";
+      const topbar = document.querySelector(".topbar") || document.querySelector(".header .topbar") || document.querySelector(".header");
+      if (topbar) topbar.appendChild(btnMostrar);
+    }
+  };
+  maybeAttachShowButton();
+
+  // Restaura dataset (sin auto-render para evitar bloqueo al volver a index)
   try{
     const ds = await VMPS.loadDataset();
     if (ds?.rows?.length) {
       if (estadoTag) estadoTag.textContent = ds.filename || "Dataset restaurado";
-      // Si tienes una tabla previa en esta página, puedes pintarla aquí:
-      renderRowsInTable && renderRowsInTable(ds.rows);
 
+      // Auto-render SOLO si aún no se había pintado esta versión
       const seen = localStorage.getItem("vmps_rendered_builtAt");
       if (String(seen) !== String(ds.builtAt)) {
-        renderRowsInTable && renderRowsInTable(ds.rows);
-        localStorage.setItem("vmps_rendered_builtAt", String(ds.builtAt));
+        // No pintamos automáticamente para no bloquear; dejamos el botón manual
+        // Si quieres auto-render la PRIMERA VEZ justo después de cargar, eso se hace en el change del input.
       }
     }
   }catch(e){ console.warn(e); }
 
-  // Carga por input: procesa + guarda (IDB) + pinta (si tienes tabla)
+  // Listener para "Mostrar tabla" manual
+  document.getElementById("btnMostrarTabla")?.addEventListener("click", async ()=>{
+    const ds = await VMPS.loadDataset();
+    if (ds?.rows?.length) {
+      renderRowsInTable && renderRowsInTable(ds.rows);
+      localStorage.setItem("vmps_rendered_builtAt", String(ds.builtAt));
+    }
+  });
+
+  // Carga por input: procesa + guarda (IDB) + pinta + marca versión renderizada
   fileInput.addEventListener("change", async (ev) => {
     const f = ev.target.files?.[0];
     if (!f) return;
@@ -416,6 +435,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       showLoader(true);
       const dataset = await VMPS.saveFromFileInputEvent(f);
       if (estadoTag) estadoTag.textContent = dataset.filename;
+
+      // Renderizamos SOLO en esta acción de carga de archivo (UX esperado)
       renderRowsInTable && renderRowsInTable(dataset.rows);
       localStorage.setItem("vmps_rendered_builtAt", String(dataset.builtAt));
     }catch(e){
@@ -426,15 +447,27 @@ document.addEventListener("DOMContentLoaded", async () => {
       showLoader(false);
     }
   });
+
+  // Si otra pestaña sube nuevo dataset, ofrece botón para pintar (no auto-bloqueamos)
+  try {
+    const ch = new BroadcastChannel('vmps');
+    ch.onmessage = async (e) => {
+      if (e?.data?.type === 'dataset-ready') {
+        const ds = await VMPS.loadDataset();
+        if (estadoTag && ds?.filename) estadoTag.textContent = ds.filename;
+        localStorage.removeItem("vmps_rendered_builtAt"); // nueva versión: no está pintada aún
+        maybeAttachShowButton();
+      }
+    };
+  } catch {}
 });
 
-/* ================== (OPCIONAL) Helper de render tabla local ==================
-   Deja esto si en alguna página quieres render previo; si no, puedes borrarlo.
-*/
+/* ================== Helper de render tabla (lazy) ================== */
 function renderRowsInTable(rows){
   const tbody = document.querySelector("#tablaMP tbody") || document.querySelector("table tbody");
   if(!tbody) return;
 
+  // Destruye DataTable anterior si existe
   if (window.jQuery && $.fn.dataTable && $.fn.dataTable.isDataTable("#tablaMP")) {
     $("#tablaMP").DataTable().destroy();
   }
@@ -446,29 +479,45 @@ function renderRowsInTable(rows){
     return;
   }
 
+  // Pintado incremental para no congelar la UI (bloques de 1000 filas)
   const frag = document.createDocumentFragment();
-  for(const r of rows){
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${r.CodigoMP ?? ""}</td>
-      <td>${r.MateriaPrima ?? ""}</td>
-      <td>${r.Linea ?? ""}</td>
-      <td>${r.CodigoArticulo ?? ""}</td>
-      <td>${r.NombreArticulo ?? ""}</td>
-      <td data-order="${r.FechaISO || ""}">${r.Fecha || ""}</td>
-      <td>${r.OPE ?? r.Produccion ?? ""}</td>
-      <td style="text-align:right">${(r.CajasProducidas ?? 0).toLocaleString("es-MX")}</td>
-      <td style="text-align:right">${(r.CantidadTeorica ?? 0).toLocaleString("es-MX")}</td>
-      <td style="text-align:right">${(r.CantidadReal ?? 0).toLocaleString("es-MX")}</td>
-      <td style="text-align:right">${(r.Merma ?? 0).toLocaleString("es-MX")}</td>
-      <td style="text-align:right">${(r.CostoMerma ?? 0).toLocaleString("es-MX",{minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-      <td style="text-align:right">${Number(r.RendPct ?? 0).toFixed(2)}%</td>
-      <td style="text-align:right">${Number(r.MermaPct ?? 0).toFixed(2)}%</td>
-      <td>${r.CategoriaMP ?? ""}</td>
-      <td>${r.SubcategoriaMP ?? ""}</td>
-    `;
-    frag.appendChild(tr);
+  const chunk = 1000;
+  let i = 0;
+
+  function drawChunk(){
+    const end = Math.min(i + chunk, rows.length);
+    for (; i < end; i++){
+      const r = rows[i];
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.CodigoMP ?? ""}</td>
+        <td>${r.MateriaPrima ?? ""}</td>
+        <td>${r.Linea ?? ""}</td>
+        <td>${r.CodigoArticulo ?? ""}</td>
+        <td>${r.NombreArticulo ?? ""}</td>
+        <td data-order="${r.FechaISO || ""}">${r.Fecha || ""}</td>
+        <td>${r.OPE ?? r.Produccion ?? ""}</td>
+        <td style="text-align:right">${(r.CajasProducidas ?? 0).toLocaleString("es-MX")}</td>
+        <td style="text-align:right">${(r.CantidadTeorica ?? 0).toLocaleString("es-MX")}</td>
+        <td style="text-align:right">${(r.CantidadReal ?? 0).toLocaleString("es-MX")}</td>
+        <td style="text-align:right">${(r.Merma ?? 0).toLocaleString("es-MX")}</td>
+        <td style="text-align:right">${(r.CostoMerma ?? 0).toLocaleString("es-MX",{minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+        <td style="text-align:right">${Number(r.RendPct ?? 0).toFixed(2)}%</td>
+        <td style="text-align:right">${Number(r.MermaPct ?? 0).toFixed(2)}%</td>
+        <td>${r.CategoriaMP ?? ""}</td>
+        <td>${r.SubcategoriaMP ?? ""}</td>
+      `;
+      frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+
+    if (i < rows.length) {
+      // cede el hilo para no congelar la UI
+      setTimeout(drawChunk, 0);
+    } else {
+      // Inicializa DataTable al final (evita reindexar en cada chunk)
+      window.ensureDataTable && window.ensureDataTable();
+    }
   }
-  tbody.appendChild(frag);
-  window.ensureDataTable && window.ensureDataTable();
+  drawChunk();
 }

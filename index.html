@@ -3,164 +3,175 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Visualización MP — Concentrado</title>
+  <title>Visualización MP — Carga de datos</title>
   <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="upload-buttons.css" />
+  <style>
+    .hero { display:grid; place-items:center; padding:60px 20px; text-align:center; }
+    .hero__card { background:#17171a; border:1px solid #2a2a2f; border-radius:16px; padding:32px; max-width:760px; width:100%; box-shadow:0 8px 30px rgba(0,0,0,.25);}
+    .hero__btns { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
+    .hero .muted { max-width:640px; margin:8px auto 0; }
+    .pill { display:inline-flex; align-items:center; gap:8px; background:#101012; border:1px solid #2a2a2f; border-radius:999px; padding:8px 12px; }
+    .hidden { display:none !important; }
+    /* loader */
+    #pageLoader{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); backdrop-filter:blur(2px); z-index:9999;}
+    .pageLoader__box{ background:#1A1A1D; color:#F5F5F7; border:1px solid #2A2A2F; padding:18px 20px; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.25); display:flex; align-items:center; gap:12px;}
+    @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  </style>
 </head>
 <body>
+  <div id="pageLoader" role="status" aria-live="polite">
+    <div class="pageLoader__box">
+      <svg width="22" height="22" viewBox="0 0 24 24" style="animation:spin 1s linear infinite">
+        <circle cx="12" cy="12" r="10" stroke="#FF6D00" stroke-width="3" fill="none" opacity=".25"/>
+        <path d="M22 12a10 10 0 0 1-10 10" stroke="#FF6D00" stroke-width="3" fill="none"/>
+      </svg>
+      <strong>Procesando archivo…</strong>
+    </div>
+  </div>
+
   <div class="container">
 
-    <!-- Header -->
+    <!-- Header (igual que antes) -->
     <div class="header">
       <div class="brand">
         <div class="brand__logo" aria-hidden="true"></div>
         <div>
           <div class="brand__title">Visualización MP</div>
-          <div class="muted" style="font-size:12px;">POC 100% local • Datos no se suben a servidor</div>
+          <div class="muted" style="font-size:12px;">POC 100% local · Datos no se suben a servidor</div>
         </div>
       </div>
-
-      <div class="topbar">
-        <div class="tag">Estado: <strong>Sin archivo</strong></div>
-        <div class="file">
-          <button class="file__btn">Seleccionar archivo</button>
-          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
-        </div>
-      </div>
+      <div class="topbar"><!-- vacío a propósito --></div>
     </div>
 
-    <!-- Tabs -->
+    <!-- Tabs (la primera renombrada) -->
     <nav class="tabs" aria-label="Secciones">
-      <a class="tab tab--active" href="index.html">Concentrado</a>
+      <a class="tab tab--active" href="index.html">Carga de datos</a>
       <a class="tab" href="consumo-por-linea.html">Gráficas y Comparativas</a>
-      
     </nav>
 
-    <!-- Panel principal (Concentrado) -->
+    <!-- Panel principal -->
     <section class="panel">
-      <h2 style="margin:0 0 12px 0;">Concentrado</h2>
-      <p class="muted" style="margin:0 0 18px 0;">
-        Aquí se muestra la tabla completa de datos procesados del archivo cargado.
-      </p>
 
-      <!-- Controles superiores -->
-<div class="table-controls top">
-  <div id="dt-length"></div>
-  <div id="dt-filter"></div>
-</div>
+      <!-- Estado: SIN ARCHIVO -->
+      <div id="card-upload" class="hero">
+        <div class="hero__card">
+          <h2 style="margin:0 0 6px">Cargar reporte</h2>
+          <p class="muted">Sube el archivo de rendimientos/mermas (XLSX/XLS/CSV). Los datos se procesan <strong>solo en tu navegador</strong> y permanecen en tu equipo.</p>
+          <div class="hero__btns">
+            <label class="upl-cta2 " style="cursor:pointer">
+              <input id="uploader" type="file" accept=".xlsx,.xls,.csv" style="display:none">
+              Subir archivo
+            </label>
+          </div>
+          <p class="muted">Luego podrás analizar por línea, materia prima, fechas y ver el detalle por OPE.</p>
+        </div>
+      </div>
 
-<!-- Tabla completa (sin scroll interno) -->
-<div style="overflow-x:auto;">
-  <table class="table" id="tablaMP">
-    <thead>
-      <tr>
-        
-        <th>CodigoMP</th>
-        <th>Materia Prima</th>
-        <th>Línea</th>
-        <th>Código de artículo</th>
-        <th>Nombre de artículo</th>
-        <th>Fecha</th>
-        <th>Producción</th>
-        <th>Cajas Producidas</th> <!-- NUEVO -->
+      <!-- Estado: CON ARCHIVO -->
+      <div id="card-current" class="hero hidden">
+        <div class="hero__card">
+          <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <span class="pill">Archivo actual: <strong id="currName">—</strong></span>
+          </div>
+          <div class="hero__btns">
+            <label class="upl-cta" style="cursor:pointer">
+              <input id="replacer" type="file" accept=".xlsx,.xls,.csv" style="display:none">
+              Reemplazar archivo
+            </label>
+            <button id="btnDelete" class="upl-cta upl-danger" type="button">Eliminar archivo</button>
+          </div>
+          <p class="muted">Tip: si reemplazas el archivo, todos los módulos usarán de inmediato el nuevo dataset.</p>
+        </div>
+      </div>
 
-        <th>Cantidad Teórica</th>
-        <th>Cantidad Real</th>
-        <th>Merma</th>
-        <th>Costo Merma</th>
-        <th>% Rendimiento</th>
-        <th>% Merma</th>
-        <th>Categoría MP</th>       <!-- NUEVO -->
-        <th>Subcategoría MP</th>  
-            <!-- NUEVO -->
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td colspan="16" class="muted">Cargue un archivo para ver datos…</td></tr>
-    </tbody>
-
-  </table>
-</div>
-<!-- DEV: persistir en localStorage (quitar o poner false en producción) -->
-<script>window.__DEV_PERSIST__ = true;</script>
-
-<!-- Controles inferiores -->
-<div class="table-controls bottom">
-  <div id="dt-info"></div>
-  <div id="dt-pager"></div>
-</div>
-
-      
     </section>
-    </div>
+  </div>
 
-    <!-- jQuery (necesario para DataTables) -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<!-- DataTables -->
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+  <!-- Módulo de datos (IndexedDB + parser) -->
+  <script src="procesamientoDatos.js?v=IDB1"></script>
 
-<script>
-  // --- Inicializador de DataTables ---
-  function ensureDataTable() {
-    if ($.fn.dataTable.isDataTable("#tablaMP")) {
-      $("#tablaMP").DataTable().columns.adjust().order([5, "asc"]).draw(false);
-      return;
+  <script>
+  (function(){
+    const $ = sel => document.querySelector(sel);
+    const loader = $("#pageLoader");
+    const showLoader = (on)=> loader.style.display = on ? "grid" : "none";
+
+    const IDB_NAME = "vmps_db_v1"; // mismo nombre que usa procesamientoDatos.js
+
+    async function clearDataset(){
+      // 1) borra la BD completa
+      await new Promise((res) => {
+        const req = indexedDB.deleteDatabase(IDB_NAME);
+        req.onsuccess = req.onerror = req.onblocked = ()=> res();
+      });
+      // 2) limpia compat/fallback y banderas
+      try {
+        sessionStorage.removeItem("vmps_meta_v1");
+        sessionStorage.removeItem("vmps_rows_v1");
+        sessionStorage.removeItem("vmps_cajasByOpe_v1");
+        localStorage.removeItem("vmps_rendered_builtAt");
+      } catch {}
+      // 3) avisa a otras pestañas
+      try { new BroadcastChannel("vmps").postMessage({ type:"dataset-deleted" }); } catch {}
     }
-    $("#tablaMP").DataTable({
-      pageLength: 10,                 // ← default 10
-      lengthMenu: [10, 25, 50],       // ← opciones 10/25/50
-      autoWidth: false,
-      ordering: true,
-      order: [[5, "asc"]],            // ← Fecha (más antigua primero)
-      language: { url: "https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-MX.json" },
-      dom: "lfrtip",
-      columnDefs: [
-        { targets: [7,8,9,10,11,12,13], className: "dt-center" }, // numéricos
-        { targets: [5], className: "dt-center" }              // fecha
-      ],
-      initComplete: function(){
-        const $wrap = $(this.api().table().container());
-        $wrap.find("div.dataTables_length").appendTo("#dt-length");
-        $wrap.find("div.dataTables_filter").appendTo("#dt-filter");
-        $wrap.find("div.dataTables_info").appendTo("#dt-info");
-        $wrap.find("div.dataTables_paginate").appendTo("#dt-pager");
+
+    function showUpload(){
+      $("#card-upload").classList.remove("hidden");
+      $("#card-current").classList.add("hidden");
+    }
+    function showCurrent(name){
+      $("#currName").textContent = name || "(sin nombre)";
+      $("#card-upload").classList.add("hidden");
+      $("#card-current").classList.remove("hidden");
+    }
+
+    // Estado inicial
+    document.addEventListener("DOMContentLoaded", async ()=>{
+      try{
+        const ds = await window.VMPS.loadDataset();
+        if (ds?.rows?.length) showCurrent(ds.filename || "dataset");
+        else showUpload();
+      }catch{
+        showUpload();
       }
     });
-  }
-</script>
 
+    // Subir archivo (primera vez)
+    $("#uploader")?.addEventListener("change", async (ev)=>{
+      const f = ev.target.files?.[0]; if (!f) return;
+      try{
+        showLoader(true);
+        const ds = await window.VMPS.saveFromFileInputEvent(f);
+        localStorage.setItem("vmps_rendered_builtAt", String(ds.builtAt)); // marca versión
+        showCurrent(ds.filename || f.name);
+      }catch(e){
+        console.error(e); alert("No se pudo procesar el archivo. Revisa la consola.");
+      }finally{ showLoader(false); ev.target.value = ""; }
+    });
 
+    // Reemplazar archivo
+    $("#replacer")?.addEventListener("change", async (ev)=>{
+      const f = ev.target.files?.[0]; if (!f) return;
+      try{
+        showLoader(true);
+        const ds = await window.VMPS.saveFromFileInputEvent(f);
+        localStorage.setItem("vmps_rendered_builtAt", String(ds.builtAt));
+        showCurrent(ds.filename || f.name);
+      }catch(e){
+        console.error(e); alert("No se pudo procesar el archivo. Revisa la consola.");
+      }finally{ showLoader(false); ev.target.value = ""; }
+    });
 
-
-      <!-- Librería SheetJS -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- Tu script -->
-  <script src="procesamientoDatos.js?v=8"></script>
-
-
-  <!-- Overlay de carga -->
-  <div id="loader" style="
-    position: fixed; inset: 0; display: none; place-items: center;
-    background: rgba(0,0,0,.55); backdrop-filter: blur(2px); z-index: 9999;
-    font-family: Montserrat, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  ">
-    <div style="
-      background: #1A1A1D; color: #F5F5F7; border:1px solid #2A2A2F;
-      padding: 18px 20px; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.25);
-      display:flex; align-items:center; gap:12px;
-    ">
-      <svg width="22" height="22" viewBox="0 0 24 24" style="animation:spin 1s linear infinite">
-        <circle cx="12" cy="12" r="10" stroke="#FF6D00" stroke-width="3" fill="none" opacity=".25"/>
-        <path d="M22 12a10 10 0 0 1-10 10" stroke="#FF6D00" stroke-width="3" fill="none"/>
-      </svg>
-      <strong>Cargando archivo…</strong>
-    </div>
-  </div>
-  <style>
-    @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-  </style>
-  </body>
-
-  </div>
+    // Eliminar archivo (reset total)
+    $("#btnDelete")?.addEventListener("click", async ()=>{
+      if (!confirm("¿Eliminar el archivo y limpiar los datos locales?")) return;
+      showLoader(true);
+      await clearDataset();
+      showLoader(false);
+      showUpload();
+    });
+  })();
+  </script>
 </body>
 </html>
