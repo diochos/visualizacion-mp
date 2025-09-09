@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Detalle OPE</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="brand">
+        <div class="brand__logo"></div>
+        <div class="brand__title">Detalle de Producción</div>
+      </div>
+      <span class="tag">Vista de OPE</span>
+    </header>
+
+    <div class="submeta" style="display:flex; gap:10px; margin:10px 0 6px">
+      <span class="tag" id="metaLinea">Línea: —</span>
+      <span class="tag" id="metaFecha">Fecha: —</span>
+    </div>
+
+
+    <!-- KPIs corporativos -->
+    <section class="grid grid--3" id="kpiRow">
+      <div class="kpi">
+        <div class="kpi__label">OPE</div>
+        <div class="kpi__value" id="kpiOpe">—</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">Cajas producidas</div>
+        <div class="kpi__value" id="kpiCajas">0</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">Rango (filas)</div>
+        <div class="kpi__value" id="kpiFilas">0</div>
+      </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="panel">
+      <h3 style="margin:0 0 10px">Integración de MP por Producción</h3>
+      <div id="msg" class="muted" style="margin:6px 0 12px; display:none"></div>
+
+      <table class="table" id="tablaOPE">
+        <thead>
+          <tr>
+            <th style="width:38%">Materia Prima</th>
+            <th class="num" style="width:20%">Cantidad Teórica Lmat</th>
+            <th class="num" style="width:20%">Consumo Teórico (REAL)</th> <!-- NUEVA -->
+            <th class="num" style="width:20%">Cantidad Real</th>
+            <th class="num" style="width:20%">Merma</th>
+            <th class="num" style="width:10%">% Merma</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot></tfoot>
+      </table>
+    </section>
+  </div>
+
+  <!-- Carga el módulo que maneja IndexedDB y el parser -->
+  <script src="procesamientoDatos.js?v=IDB1"></script>
+
+<script>
+  // ========== utils ==========
+  const fmt  = (n, d=0)=> Number(n||0).toLocaleString("es-MX",{minimumFractionDigits:d, maximumFractionDigits:d});
+  const norm = s => String(s ?? "").trim().toUpperCase();
+  const human = iso => /^\d{4}-\d{2}-\d{2}$/.test(iso||"")
+  ? `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}` : (iso||"");
+
+
+  // Normalizador robusto para llaves de producto (CSV y dataset)
+  const nk = s => String(s ?? "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase().replace(/\s+/g," ").trim();
+
+  // CSV parser simple (admite comillas)
+  function splitCSVRow(row){
+    const out = []; let cur = ""; let inQ = false;
+    for (let i=0; i<row.length; i++){
+      const ch = row[i];
+      if (ch === '"') {
+        if (inQ && row[i+1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === ',' && !inQ) {
+        out.push(cur); cur = "";
+      } else cur += ch;
+    }
+    out.push(cur);
+    return out.map(s => s.replace(/^"(.*)"$/, "$1"));
+  }
+
+  // Carga datos.csv → Map por articulo normalizado → { bpc, litros, jarabe }
+  let __CAT_PROD = null;
+  async function loadProductoCatalog(){
+    if (__CAT_PROD) return __CAT_PROD;
+    try{
+      const res = await fetch("datos.csv", { cache: "no-store" });
+      if (!res.ok) throw new Error("datos.csv no accesible");
+      const txt = await res.text();
+      const lines = txt.split(/\r?\n/).filter(l => l.trim().length);
+      if (lines.length < 2) throw new Error("datos.csv vacío");
+      const headers = splitCSVRow(lines[0]).map(h => nk(h));
+      const col = (name) => headers.indexOf(nk(name));
+      const iArt = col("articulo");
+      const iBpc = col("bpc");
+      const iLit = col("litros");
+      const iJar = col("jarabe");
+
+      const map = new Map();
+      for (let i=1; i<lines.length; i++){
+        const cells = splitCSVRow(lines[i]);
+        const art   = nk(cells[iArt] ?? "");
+        if (!art) continue;
+        // BPC puede venir "12" o "12P" → extrae número
+        const bpcRaw = String(cells[iBpc] ?? "");
+        const m = bpcRaw.match(/[\d.]+/);
+        const bpc = m ? Number(m[0]) : Number(bpcRaw) || 0;
+        const litros  = Number(String(cells[iLit] ?? "").replace(",", ".")) || 0;
+        const jarabe  = Number(String(cells[iJar] ?? "").replace(",", ".")) || 0;
+        map.set(art, { bpc, litros, jarabe });
+      }
+      __CAT_PROD = map;
+      return map;
+    }catch(e){
+      console.warn("No se pudo leer datos.csv:", e);
+      __CAT_PROD = new Map();
+      return __CAT_PROD;
+    }
+  }
+
+  function groupByMP(rows){
+    const map = new Map(); // mp -> {mp, teo, real, merma, cat}
+    for (const r of rows){
+      const key = r.MateriaPrima ?? r.MP ?? r["Materia Prima"] ?? "(sin nombre)";
+      const acc = map.get(key) || { mp:key, teo:0, real:0, merma:0, cat:null };
+      acc.teo   += Number(r.CantidadTeorica ?? 0);
+      acc.real  += Number(r.CantidadReal   ?? 0);
+      acc.merma += Number(r.Merma          ?? 0);
+      // toma la categoría más frecuente
+      const cat = r.CategoriaMP ?? r["Categoria MP"] ?? null;
+      if (!acc.cat && cat) acc.cat = cat;
+      map.set(key, acc);
+    }
+    return [...map.values()].sort((a,b)=> b.merma - a.merma);
+  }
+
+    // Producto más frecuente (texto original) para mostrarlo bonito
+  function getProductoDisplay(rows){
+    const cnt = new Map();
+    for (const r of rows){
+      const name = r.NombreArticulo ?? r["Nombre Articulo"] ?? r.CodNombre ?? "";
+      const s = String(name).trim();
+      if (!s) continue;
+      cnt.set(s, (cnt.get(s)||0) + 1);
+    }
+    let best = "", bestN = 0;
+    for (const [k,n] of cnt) if (n > bestN) { best = k; bestN = n; }
+    return best;
+  }
+
+  // Limpia adornos típicos (packs, códigos) para verlo tipo "Coca 600 ml"
+  function shortArticuloName(s){
+    return String(s || "")
+      .replace(/\b(\d{1,3})P\b/gi, "")      // 12P, 24P...
+      .replace(/\bNRP?\b/gi, "")            // NRP / NR
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+
+  function cajasFromRows(rows){
+    // usa el máximo no-cero observado (típicamente viene como total por OPE)
+    let best = 0;
+    for (const r of rows){
+      const v = Number(r.CajasProducidas || 0);
+      if (v > best) best = v;
+    }
+    return best;
+  }
+
+  // Dado el subset de filas de la OPE, obtiene el "producto" (NombreArticulo) más frecuente
+  function getProductoDeOPE(rows){
+    const cnt = new Map();
+    for (const r of rows){
+      const name = r.NombreArticulo ?? r["Nombre Articulo"] ?? r.CodNombre ?? "";
+      const key = nk(name);
+      if (!key) continue;
+      cnt.set(key, (cnt.get(key) || 0) + 1);
+    }
+    let bestKey = ""; let bestN = 0;
+    for (const [k,n] of cnt.entries()){
+      if (n > bestN){ bestN = n; bestKey = k; }
+    }
+    return bestKey; // normalizado
+  }
+
+ // Calcula "Consumo Teórico (REAL)" por MP (Preformas, Tapas, Etiqueta, Jarabe)
+    function computeTeoricoRealPorMP(mpRow, ctx){
+      const cat = String(mpRow.cat || "").toLowerCase();
+      const { cajas=0, bpc=0, litros=0, relJarabe=0 } = ctx;
+
+      // Preformas: piezas = cajas * BPC
+      if (cat.includes("preforma")) {
+        return (cajas > 0 && bpc > 0) ? cajas * bpc : null;
+      }
+
+      // Tapas: en millares → (cajas * BPC) / 1000
+      if (cat.includes("tapa")) {
+        return (cajas > 0 && bpc > 0) ? (cajas * bpc) / 1000 : null;
+      }
+
+      // Etiqueta: 1 por botella → cajas * BPC
+      if (cat.includes("etiqu")) {
+        return (cajas > 0 && bpc > 0) ? cajas * bpc : null;
+      }
+
+      // Jarabe: (cajas * BPC * litros) / relación_jarabe
+      if (cat.includes("jarab")) {
+        return (cajas > 0 && bpc > 0 && litros > 0 && relJarabe > 0)
+          ? (cajas * bpc * litros) / relJarabe
+          : null;
+      }
+
+      // otras categorías: pendiente
+      return null;
+    }
+
+  // ========== render principal ==========
+  async function renderDetalle(){
+    const q   = new URLSearchParams(location.search);
+    const OPE = norm(q.get("ope") || "");
+    document.getElementById("kpiOpe").textContent = OPE || "—";
+
+    // 1) dataset guardado en IndexedDB
+    const ds = await (window.VMPS?.loadDataset?.() || Promise.resolve(null));
+
+    if (!ds || !Array.isArray(ds.rows) || ds.rows.length === 0){
+      // 2) “en frío”: invita a subir el Excel aquí mismo
+      const msg = document.getElementById("msg");
+      msg.style.display = "";
+      msg.innerHTML = `
+        No hay datos locales. <label class="btn btn--ghost" style="margin-left:8px;cursor:pointer">
+          <input type="file" id="fileInline" accept=".xlsx,.xls,.csv" style="display:none" />
+          Seleccionar Excel
+        </label>
+      `;
+      document.getElementById("fileInline")?.addEventListener("change", async (ev)=>{
+        const f = ev.target.files?.[0];
+        if (!f) return;
+        msg.textContent = "Procesando archivo...";
+        try{
+          await window.VMPS.saveFromFileInputEvent(f);
+          msg.textContent = "Datos cargados. Renderizando…";
+          await renderDetalle();
+        }catch(e){
+          console.error(e);
+          msg.textContent = "No se pudo procesar el archivo. Revisa la consola.";
+        }
+      });
+      return;
+    }
+
+    // 3) filtra por OPE
+    const all = ds.rows || [];
+    const rowsOPE = OPE
+      ? all.filter(r => {
+          const code = norm(r.OPE ?? r.Produccion ?? r["Producción"] ?? r.OP ?? r.Op ??
+                            r.Orden ?? r["Orden Producción"] ?? r.OrdenProduccion);
+          return code === OPE;
+        })
+      : all.slice();
+
+    // KPIs base
+    // Línea (toma la más frecuente; si hay varias, las lista)
+    const lineas = rowsOPE.map(r => r.Linea).filter(Boolean);
+    const lineacnt = new Map();
+    for (const l of lineas) lineacnt.set(l, (lineacnt.get(l)||0)+1);
+    let lineaTop = "—", best = 0;
+    for (const [k,n] of lineacnt) if (n>best){ best=n; lineaTop=k; }
+    document.getElementById("metaLinea").textContent = `Línea: ${lineaTop}`;
+
+    // Fecha (si hay varias, muestra rango)
+    const fechas = rowsOPE.map(r => r.FechaISO || r.Fecha).filter(Boolean).sort();
+    let fechaTxt = "—";
+    if (fechas.length){
+      const min = fechas[0], max = fechas[fechas.length-1];
+      fechaTxt = (min===max) ? human(min) : `${human(min)} a ${human(max)}`;
+    }
+    document.getElementById("metaFecha").textContent = `Fecha: ${fechaTxt}`;
+
+     // KPIs base
+    const cajasMap = new Map((ds.cajasByOpe || []).map(x => [norm(x.ope), Number(x.cajas || 0)]));
+    const cajas = cajasMap.get(OPE) ?? cajasFromRows(rowsOPE);
+    document.getElementById("kpiCajas").textContent = fmt(cajas);
+    document.getElementById("kpiFilas").textContent = fmt(rowsOPE.length);
+
+    // Si no hay filas → mensaje
+    const tbody = document.querySelector("#tablaOPE tbody");
+    const tfoot = document.querySelector("#tablaOPE tfoot");
+    const msg   = document.getElementById("msg");
+
+    if (!rowsOPE.length){
+      msg.style.display = "";
+      msg.textContent = "No hay filas para esa OPE en los datos recibidos.";
+      tbody.innerHTML = ""; tfoot.innerHTML = "";
+      return;
+    } else msg.style.display = "none";
+
+    // 4) agregados por MP
+    const agg = groupByMP(rowsOPE);
+
+    // 5) contexto para cálculos “teóricos reales” (producto y BPC)
+    const productoKey = getProductoDeOPE(rowsOPE);        // normalizado
+    const catProd = await loadProductoCatalog();
+    const prodInfo = productoKey ? (catProd.get(productoKey) || null) : null;
+    const bpc = prodInfo?.bpc || 0;
+    const litros    = prodInfo?.litros || 0;
+    const relJarabe = prodInfo?.jarabe || 0;
+
+    
+    // 👉 Cambia el KPI 3 para que muestre el Artículo
+    const kpi3Label = document.querySelector('#kpiRow .kpi:nth-child(3) .kpi__label');
+    if (kpi3Label) kpi3Label.textContent = 'Artículo';
+    const artDisplay = getProductoDisplay(rowsOPE);
+    document.getElementById('kpiFilas').textContent = shortArticuloName(artDisplay) || '—';
+
+    // 6) render con columna nueva y discrepancia en rojo (tolerancia 1 unidad)
+    let sumT = 0, sumR = 0, sumM = 0, sumTR = 0;
+    const TOL = 1; // pzas
+
+    tbody.innerHTML = "";
+    const frag = document.createDocumentFragment();
+
+    for (const a of agg){
+      const teoReal = computeTeoricoRealPorMP(a, { cajas, bpc, litros, relJarabe });
+
+      // tolerancia: 0.5% o 1 unidad (lo que sea mayor) para evitar falsos rojos por redondeo
+      const diff = (teoReal != null) ? Math.abs((a.teo || 0) - teoReal) : 0;
+      const tol  = Math.max(1, 0.005 * Math.max(a.teo || 0, teoReal || 0));
+      const mismatch = (teoReal != null) && diff > tol;
+
+      const pMerma = (a.teo > 0) ? (a.merma / a.teo * 100) : 0;
+
+      const tr = document.createElement("tr");
+
+      sumT += a.teo; sumR += a.real; sumM += a.merma;
+      if (teoReal != null) sumTR += teoReal;
+
+      tr.innerHTML = `
+        <td>${a.mp}</td>
+        <td class="num" style="${mismatch ? 'color:#b00020;font-weight:600' : ''}">${fmt(a.teo)}</td>
+        <td class="num">${teoReal != null ? fmt(teoReal) : '—'}</td>
+        <td class="num">${fmt(a.real)}</td>
+        <td class="num">${fmt(a.merma)}</td>
+        <td class="num">${pMerma ? pMerma.toFixed(2) + '%' : '—'}</td>
+      `;
+
+      frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+
+    const pMermaTotal = (sumT > 0) ? (sumM / sumT * 100) : 0;
+    tfoot.innerHTML = `
+      <tr>
+        <th>Total</th>
+        <th class="num">${fmt(sumT)}</th>
+        <th class="num">${sumTR ? fmt(sumTR) : '—'}</th>
+        <th class="num">${fmt(sumR)}</th>
+        <th class="num">${fmt(sumM)}</th>
+        <th class="num">${pMermaTotal ? pMermaTotal.toFixed(2) + '%' : '—'}</th>
+      </tr>
+    `;
+  }
+
+  document.addEventListener("DOMContentLoaded", renderDetalle);
+</script>
+
+
+
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Visualización MP - Órdenes</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>.spa-view.hidden{display:none!important}</style>
+</head>
+<body>
+  <!-- Loader global de página -->
+  <div id="pageLoader" role="status" aria-live="polite">
+    <div class="pageLoader__box">
+      <div class="pageLoader__spinner" aria-hidden="true"></div>
+      <strong>Cargando…</strong>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="brand">
+        <div class="brand__logo" aria-hidden="true"></div>
+        <div>
+          <div class="brand__title">Órdenes de Producción</div>
+          <div class="muted">POC 100% local · Datos no se suben a servidor</div>
+        </div>
+      </div>
+
+      <div class="topbar">
+        <a class="btn" href="index.html">⬅ Volver a Concentrado</a>
+      
+        <span class="tag">Archivo: <strong id="fileTag">—</strong></span>
+      </div>
+       <!-- Tabs (navegación) -->
+  
+    </div>
+      <nav class="tabs" aria-label="Secciones">
+        <a class="tab" href="index.html">Concentrado</a>
+        <a class="tab" href="consumo-por-linea.html#consumo-por-linea-html" data-view="consumo-por-linea-html">Consumo por línea</a>
+        <a class="tab" href="consumo-por-linea.html#linea-vs-linea-html" data-view="linea-vs-linea-html">Comparativa</a>
+        <a class="tab tab--active" href="ordenes.html">Ordenes</a>
+        </nav>
+
+    <!-- Filtros -->
+    <section class="panel">
+      <div class="grid grid--3">
+        <div>
+          <label class="muted">Línea</label>
+          <select id="selLinea" class="btn" style="width:100%"></select>
+        </div>
+        <div>
+          <label class="muted">Categoría MP</label>
+          <select id="selCategoria" class="btn" style="width:100%"></select>
+        </div>
+        <div>
+          <!-- placeholder para mantener el grid alineado -->
+        </div>
+      </div>
+
+      <!-- Periodo -->
+      <div class="panel panel--ghost" style="margin-top:16px">
+        <div class="muted" style="margin-bottom:8px;">Periodo</div>
+
+        <!-- Botones de mes (se llenan en JS) -->
+        <div id="monthButtons" class="topbar" style="gap:8px; flex-wrap:wrap"></div>
+        <!-- Overlay local de periodo -->
+        <div id="periodOverlay" class="period-overlay hidden">
+          <span class="spinner" aria-hidden="true"></span>
+          <span style="margin-left:8px">Cargando fechas…</span>
+        </div>
+
+        <!-- Rango personalizado -->
+        <div id="customRange" class="topbar" style="gap:8px; flex-wrap:wrap; display:none; margin-top:8px;">
+          <label class="muted" for="dateStart">Inicio</label>
+          <input id="dateStart" type="date" class="btn" />
+          <label class="muted" for="dateEnd">Fin</label>
+          <input id="dateEnd" type="date" class="btn" />
+          <button id="btnApplyRange" class="btn" type="button">Aplicar</button>
+          <button id="btnClearRange" class="btn btn--ghost" type="button">Limpiar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="panel">
+      <div class="table-controls top">
+        <div class="muted">Órdenes (ordenadas por % de merma desc.)</div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="table" id="tablaOrdenes">
+          <thead>
+            <tr>
+              <th style="width:26%">Código OPE</th>
+              <th style="width:34%">Línea</th>
+              <th style="width:20%">Fecha</th>
+              <th class="num" style="width:20%">% de merma</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="4" class="muted">Cargue un archivo en “Concentrado”…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div><!-- /.container -->
+
+  <!-- Scripts -->
+  <script src="procesamientoDatos.js?v=IDB1"></script>
+  <script src="ordenes.js?v=1"></script>
+
+  <!-- Mostrar nombre de archivo y reaccionar a cambios -->
+  <script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const tag = document.getElementById('fileTag');
+    try {
+      const ds = await VMPS.loadDataset();
+      if (tag && ds?.filename) tag.textContent = ds.filename;
+    } catch {}
+    try {
+      const ch = new BroadcastChannel('vmps');
+      ch.onmessage = async (e) => {
+        if (e?.data?.type === 'dataset-ready') {
+          const ds = await VMPS.loadDataset();
+          if (tag && ds?.filename) tag.textContent = ds.filename;
+          // recargar vista con nuevos datos
+          if (window.ORDENES && window.ORDENES.reload) window.ORDENES.reload();
+        }
+      };
+    } catch {}
+  });
+  </script>
+</body>
+</html>
