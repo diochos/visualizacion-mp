@@ -399,6 +399,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (estadoTag) estadoTag.textContent = ds.filename || "Dataset restaurado";
       // Si tienes una tabla previa en esta página, puedes pintarla aquí:
       renderRowsInTable && renderRowsInTable(ds.rows);
+
+      const seen = localStorage.getItem("vmps_rendered_builtAt");
+      if (String(seen) !== String(ds.builtAt)) {
+        renderRowsInTable && renderRowsInTable(ds.rows);
+        localStorage.setItem("vmps_rendered_builtAt", String(ds.builtAt));
+      }
     }
   }catch(e){ console.warn(e); }
 
@@ -411,6 +417,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const dataset = await VMPS.saveFromFileInputEvent(f);
       if (estadoTag) estadoTag.textContent = dataset.filename;
       renderRowsInTable && renderRowsInTable(dataset.rows);
+      localStorage.setItem("vmps_rendered_builtAt", String(dataset.builtAt));
     }catch(e){
       console.error(e);
       if (estadoTag) estadoTag.textContent = "Error al procesar";
