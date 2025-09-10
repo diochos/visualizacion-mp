@@ -825,7 +825,7 @@
           if (!btn) return;
           const ope = btn.dataset.ope;
           // Ajusta la URL de detalle si ya tienes otra (ej. ordenes.html)
-          window.open(`ordenes.html?ope=${encodeURIComponent(ope)}`, "_blank", "noopener");
+          window.open(`detalle-ope.html?ope=${encodeURIComponent(ope)}`, "_blank", "noopener");
           hideMenu();
         });
         menu.__ctxRendBound = true;
