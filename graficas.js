@@ -351,6 +351,7 @@
       const zeroColor = getVar("--c-danger-400")  || "#ff6b6b";
       const gridColor = "rgba(255,255,255,.08)";
       const tickColor = getVar("--c-text-dim")    || "#cfd3da";
+     
 
       // Rango Y auto y línea objetivo 2%
       const meta2  = 2;
@@ -407,8 +408,12 @@
           maintainAspectRatio: false,
           interaction: { mode: "index", intersect: false },
           plugins: {
-            legend: { labels: { color: tickColor } },
+            legend: { labels: { color: tickColor }, noti:{color:"#1b31fcff"} },
             tooltip: {
+              footerColor: "#3b82f6",                      // azul
+              footerFont: { weight: "600", style: "italic" },
+              footerAlign: "center",
+              footerMarginTop: 8,
               backgroundColor: "rgba(0,0,0,.75)",
               borderColor: gridColor,
               borderWidth: 1,
@@ -421,7 +426,7 @@
                   const lab = ctx.dataset.label || "";
                   if (lab.includes("Merma")) return `Merma: ${y.toFixed(2)}%`;
                   if (lab.includes("Meta"))  return `Meta: 2.00%`;
-                  if (lab.includes("Cero"))  return `Cero: 0.00%`;
+                 
                   return `${lab}: ${y?.toFixed?.(2) ?? y}%`;
                 },
                 afterBody: (items)=>{
@@ -429,7 +434,8 @@
                   const idx = items[0].dataIndex;
                   const arr = Array.isArray(opes?.[idx]) ? opes[idx] : [];
                   return arr.length ? ["OPE(s):", ...arr.map(c => `• ${c}`)] : [];
-                }
+                },
+                footer: () => "CLICK DERECHO PARA ABRIR ORDENES"
               }
             }
           },

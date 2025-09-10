@@ -50,6 +50,21 @@
   const getMP = (r) =>
     r?.MateriaPrima ?? r?.MP ?? r?.["Materia Prima"] ?? r?.["Materia prima"] ?? "";
 
+  // OPE / OP / Producción (mismos alias que graficas.js)
+    const getOPE = (r) => {
+      const v =
+        r?.Produccion ??
+        r?.["Producción"] ??
+        r?.OP ??
+        r?.Op ??
+        r?.Orden ??
+        r?.["Orden Producción"] ??
+        r?.OrdenProduccion ??
+        "";
+      return v == null ? "" : String(v).trim();
+    };
+
+
   const getCostoMerma = (r) => N(
     r?.CostoMerma ?? r?.["CostoMerma"] ?? r?.["Costo Merma"] ?? r?.["Costo de merma"] ?? r?.["Costo total merma"] ?? 0
   );
@@ -513,10 +528,8 @@
       const mermaU = (m.real - m.teo);
       const cu = getCostoUnit(r);
       const cost = isFinite(cu) && cu > 0 ? (mermaU * cu) : getCostoMerma(r);
-      const getOPE = (r) =>
-        r?.OPE ?? r?.Op ?? r?.OP ?? r?.["No OPE"] ?? r?.["# OPE"] ??
-        r?.["Orden Producción"] ?? r?.["Orden de Producción"] ?? r?.["Orden"] ?? "";
-
+      // Igualito a graficas.js
+      
 
       const o = map.get(L) || { teo:0, real:0, cost:0 };
       o.teo  += m.teo;
@@ -583,12 +596,14 @@
         for (const r of rows) {
           if (keyOf(r) !== k) continue;
           if (rowFilter && !rowFilter(r)) continue;
-          const m = metricsForRow(r, selVal); teo += m.teo; real += m.real;
-          const op = (r.OPE ?? r.Op ?? r.OP ?? r["No OPE"] ?? r["# OPE"] ??
-                      r["Orden Producción"] ?? r["Orden de Producción"] ?? r["Orden"] ?? "");
-          if (op) seen.add(String(op));
+
+          const m = metricsForRow(r, selVal);
+          teo  += m.teo;
+          real += m.real;
+
+          const op = getOPE(r);      // 👈 aquí
+          if (op) seen.add(op);
         }
-        // % merma (2 decimales). Si necesitas rendimiento, cambia la fórmula.
         const pct = real > 0 ? ((real - teo) / real * 100) : 0;
         return { y: +pct.toFixed(2), opes: [...seen] };
       });
@@ -671,6 +686,10 @@
         plugins: {
           legend: { /* ... */ },
           tooltip: {
+            footerColor: "#3b82f6",                      // azul
+              footerFont: { weight: "600", style: "italic" },
+              footerAlign: "center",
+              footerMarginTop: 8,
             filter: (ctx) => {
               const lbl = ctx.dataset?.label || "";
               if (lbl === "0%" || lbl === "__ZERO_BASE__") return false; // oculta línea 0
@@ -693,7 +712,8 @@
                 const view = ops.slice(0, MAX);
                 const extra = ops.length > MAX ? `… (+${ops.length - MAX} más)` : null;
                 return ["OPE(s):", ...view.map(x => "• " + x), ...(extra ? [extra] : [])];
-              }
+              },
+              footer: () => "CLICK DERECHO PARA ABRIR ORDENES",
             }
           }
         }
@@ -717,7 +737,102 @@
         }
       }
     });
+    attachCtxMenuToRend(charts.rend);
   }
+
+
+    // ===== Menú contextual (clic derecho) para mostrar OPE(s) y navegar =====
+    function attachCtxMenuToRend(chart){
+      const ID = "chartCtxMenu"; // en consumo-por-linea.html ya existe
+      let menu = document.getElementById(ID);
+      if (!menu){
+        menu = document.createElement("div");
+        menu.id = ID;
+        menu.className = "ctxmenu hidden";
+        document.body.appendChild(menu);
+        // estilos mínimos por si no los trae el HTML
+        const style = document.createElement("style");
+        style.textContent = `
+          .ctxmenu{position:fixed;z-index:9999;background:#111;color:#fff;border:1px solid #333;
+                  border-radius:10px;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,.35);
+                  padding:6px; user-select:none}
+          .ctxmenu.hidden{display:none}
+          .ctxmenu__title{font-weight:600;padding:8px 12px;border-bottom:1px solid #2a2a2a;margin-bottom:4px}
+          .ctxmenu__item{display:block;width:100%;text-align:left;background:transparent;border:0;color:#fff;
+                        padding:10px 12px;cursor:pointer;font:inherit}
+          .ctxmenu__item:hover{background:rgba(255,255,255,.08)}
+          .ctxmenu__empty{opacity:.7;padding:10px 12px}
+        `;
+        document.head.appendChild(style);
+      }
+
+      const hideMenu = ()=> menu.classList.add("hidden");
+      document.addEventListener("click", (e)=>{ if (!menu.contains(e.target)) hideMenu(); });
+      document.addEventListener("keydown", (e)=>{ if (e.key === "Escape") hideMenu(); });
+
+      const canvas = chart.canvas;
+      if (!canvas) return;
+
+      // Siempre actualiza la referencia al chart vigente
+      canvas.__ctxChart = chart;
+
+      // Abrir con clic derecho
+      if (!canvas.__ctxRendBound){
+        canvas.addEventListener("contextmenu", (ev)=>{
+          ev.preventDefault();
+          const ch = ev.currentTarget.__ctxChart;
+          if (!ch) return;
+
+          // índice del punto bajo el cursor
+          const hits = ch.getElementsAtEventForMode(ev, "nearest", { intersect:true }, true);
+          if (!hits.length) { hideMenu(); return; }
+          const idx = hits[0].index;
+
+          // Unir OPE(s) de todos los datasets en ese índice
+          const ZERO_LABELS = new Set(["0%", "__ZERO_BASE__"]);
+          const seen = new Set();
+          const ops = [];
+          for (const ds of ch.data.datasets || []){
+            if (!ds || ZERO_LABELS.has(ds.label)) continue;
+            const arr = ds.opesList?.[idx];
+            if (Array.isArray(arr)) {
+              for (const op of arr) {
+                if (op && !seen.has(op)) { seen.add(op); ops.push(op); }
+              }
+            }
+          }
+
+          const label = ch.data.labels?.[idx] || "";
+
+          let html = `<div class="ctxmenu__title">OPE(s) — ${label}</div>`;
+          if (!ops.length) {
+            html += `<div class="ctxmenu__empty">Sin OPE registradas</div>`;
+          } else {
+            html += ops.map(op => `<button class="ctxmenu__item" data-ope="${op}">${op}</button>`).join("");
+          }
+          menu.innerHTML = html;
+          menu.style.left = ev.clientX + "px";
+          menu.style.top  = ev.clientY + "px";
+          menu.classList.remove("hidden");
+        });
+        canvas.__ctxRendBound = true;
+      }
+
+      // Navegar al hacer click en una OPE
+      if (!menu.__ctxRendBound){
+        menu.addEventListener("click", (e)=>{
+          const btn = e.target.closest(".ctxmenu__item[data-ope]");
+          if (!btn) return;
+          const ope = btn.dataset.ope;
+          // Ajusta la URL de detalle si ya tienes otra (ej. ordenes.html)
+          window.open(`ordenes.html?ope=${encodeURIComponent(ope)}`, "_blank", "noopener");
+          hideMenu();
+        });
+        menu.__ctxRendBound = true;
+      }
+    }
+
+
 
   // ============ Render principal ============
   function render(){
