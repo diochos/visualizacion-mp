@@ -704,7 +704,7 @@ select {
 
 
 #chartsLoader { pointer-events: none; }
-#chartsLoader.is-active { pointer-events: auto; }
+#chartsLoader.is-active { pointer-events: auto; } 
 
 
 /* OPE link base */
@@ -715,10 +715,6 @@ select {
 
 /* Fallback por historial del navegador */
 .table td:first-child a.ope-link:visited {
-  color: #22c55e; /* verde */
+  color: #00ff62; /* verde */
 }
 
-/* Marcado explícito vía JS/localStorage (tiene prioridad) */
-.table td:first-child a.ope-link.visited {
-  color: #22c55e !important; /* verde */
-}

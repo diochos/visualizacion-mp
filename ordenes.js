@@ -2,11 +2,11 @@
 (function(){
   const $ = (s) => document.querySelector(s);
 
-  // Loader
+  // ====== Loader ======
   function showPageLoader(){ $("#pageLoader")?.classList.remove("hidden"); }
   function hidePageLoader(){ $("#pageLoader")?.classList.add("hidden"); }
 
-  // UI refs
+  // ====== UI refs ======
   const fileTag      = $("#fileTag");
   const selLinea     = $("#selLinea");
   const selCategoria = $("#selCategoria");
@@ -18,11 +18,11 @@
   const btnClear     = $("#btnClearRange");
   const tbody        = $("#tablaOrdenes tbody");
 
-  // Defaults
+  // ====== Defaults ======
   const DEFAULT_LINEA = "Linea 1 - 9 Simonazzi plus Pacabtun";
   const DEFAULT_CAT   = "Preformas PET";
 
-  // Utils
+  // ====== Utils ======
   const fmt = (n,d=2)=> Number(n||0).toLocaleString("es-MX",{minimumFractionDigits:d,maximumFractionDigits:d});
   const stripAccents = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   const norm = v => stripAccents(v).toLowerCase().trim();
@@ -60,7 +60,33 @@
     return isNaN(d) ? null : new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   }
 
-  // Estado
+  // ====== Visitados OPE (persistencia local) ======
+  const VISITED_KEY = 'vmp_ope_visited_v1';
+
+  const getVisited = () => {
+    try { return new Set(JSON.parse(localStorage.getItem(VISITED_KEY) || '[]')); }
+    catch { return new Set(); }
+  };
+  const saveVisited = (set) => localStorage.setItem(VISITED_KEY, JSON.stringify([...set]));
+
+  function refreshVisitedStyles(){
+    const set = getVisited();
+    document.querySelectorAll('a.ope-link[data-ope]').forEach(a => {
+      if (set.has(a.dataset.ope)) a.classList.add('visited');
+      else a.classList.remove('visited');
+    });
+  }
+
+  function markVisited(ope){
+    const set = getVisited();
+    set.add(String(ope));
+    saveVisited(set);
+    refreshVisitedStyles();
+  }
+
+  
+
+  // ====== Estado ======
   const state = {
     rows: [],
     filterMode: "month", // month | range
@@ -69,7 +95,7 @@
     dateEnd: ""
   };
 
-  // Periodo UI
+  // ====== Periodo UI ======
   function setPeriodLoading(on){
     $("#periodOverlay")?.classList.toggle("hidden", !on);
     monthButtons?.classList.toggle("is-loading", on);
@@ -138,7 +164,7 @@
     setPeriodLoading(false);
   }
 
-  // Render
+  // ====== Render ======
   function render(){
     if (!state.rows.length) return;
 
@@ -204,7 +230,14 @@
       for (const r of rowsTbl){
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td><a href="detalle-ope.html?ope=${encodeURIComponent(r.ope)}" target="_blank" rel="noopener">${r.ope}</a></td>
+          <td>
+            <a class="ope-link"
+               data-ope="${String(r.ope).replace(/"/g,'&quot;')}"
+               href="detalle-ope.html?ope=${encodeURIComponent(r.ope)}"
+               target="_blank" rel="noopener">
+               ${r.ope}
+            </a>
+          </td>
           <td>${r.linea}</td>
           <td>${r.fecha}</td>
           <td class="num">${fmt(r.pMerma)}</td>
@@ -212,10 +245,13 @@
         frag.appendChild(tr);
       }
       tbody.appendChild(frag);
+
+      // aplicar estilos de visitados después de render
+      refreshVisitedStyles();
     }
   }
 
-  // Init
+  // ====== Init ======
   async function loadDataset(){
     const ds = await VMPS.loadDataset();
     return ds ? { filename: ds.filename || "", rows: ds.rows || [] } : null;
@@ -305,6 +341,14 @@
         customRange.style.display = "none";
         if (dateStart) dateStart.value = ""; if (dateEnd) dateEnd.value = "";
         render();
+      });
+
+      // delegado: marcar OPE como visitada cuando se hace click
+      tbody.addEventListener('click', (ev) => {
+        const a = ev.target.closest('a.ope-link[data-ope]');
+        if (!a) return;
+        const code = a.dataset.ope;
+        if (code) markVisited(code);
       });
 
       // primer render
