@@ -1,17 +1,28 @@
-// linea-vs-linea.js — Comparativa Línea vs Línea (unidades y % merma) — v3
+// linea-vs-linea.js — Comparativa Línea vs Línea (KPIs, Rendimiento, Paretos, Crítica)
 (function () {
   const host = document.getElementById("lvsl-mount");
   if (!host || host.dataset.mounted === "1") return;
   host.dataset.mounted = "1";
 
-  // ---------- helpers ----------
-  const normalize = (s) => (s ?? "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  // ============ Helpers básicos ============
+  const normalize = (s) => (s ?? "")
+    .toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().trim();
+
   const N = (v) => {
     const s = (v ?? "").toString().replace(/[%\s]/g, "").replace(",", ".");
     const n = Number(s);
     return isFinite(n) ? n : 0;
   };
-  const fmt = (n, d = 2) => (isFinite(n) ? n : 0).toLocaleString("es-MX", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  const fmt = (n, d = 2) => (isFinite(n) ? n : 0).toLocaleString("es-MX", {
+    minimumFractionDigits: d, maximumFractionDigits: d
+  });
+
+  const fmtMXN = (n) => (isFinite(n) ? n : 0).toLocaleString("es-MX", {
+    style: "currency", currency: "MXN", minimumFractionDigits: 2, maximumFractionDigits: 2
+  });
+
   const uniq = (a) => Array.from(new Set(a));
   const getVar = (name, el = document.documentElement) => getComputedStyle(el).getPropertyValue(name).trim();
   const hexA = (hex, a) => {
@@ -20,48 +31,34 @@
     const x = parseInt(m[1], 16);
     return `rgba(${(x >> 16) & 255},${(x >> 8) & 255},${x & 255},${a})`;
   };
-  const niceCeilPctSum = (x) => {
-    if (!isFinite(x) || x <= 0) return 1;
-    if (x < 5) return Math.ceil(x * 2) / 2;
-    if (x < 10) return Math.ceil(x);
-    if (x < 20) return Math.ceil(x / 2) * 2;
-    if (x < 50) return Math.ceil(x / 5) * 5;
-    return Math.ceil(x / 10) * 10;
-  };
   const yyyymm = (iso) => (iso || "").slice(0, 7); // YYYY-MM
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
-  // --- Moneda (MXN)
-    const fmtMXN = (n)=> (isFinite(n)?n:0).toLocaleString("es-MX",{ style:"currency", currency:"MXN", minimumFractionDigits:2, maximumFractionDigits:2 });
+  // ============ Lectura tolerante de columnas ============
+  const getLinea = (r) =>
+    r?.linea ?? r?.Linea ?? r?.LINEA ?? r?.["Línea"] ?? r?.["Linea"] ?? r?.["Linea Full"] ?? r?.["Línea Full"];
 
-    // --- Lectura tolerante de costos (del parser)
-    const getCostoMerma = (r)=> N(
+  const getTeo = (r) =>
+    N(r?.["Cantidad Teórica"] ?? r?.CantidadTeorica ?? r?.CTeorica ?? r?.CTEO ?? r?.teorica);
+
+  const getReal = (r) =>
+    N(r?.["Cantidad Real"] ?? r?.CantidadReal ?? r?.CReal ?? r?.CREAL ?? r?.real);
+
+  const getCat = (r) =>
+    r?.CategoriaMP ?? r?.Categoria ?? r?.["Categoría MP"] ?? r?.cat ?? "Otros";
+
+  const getMP = (r) =>
+    r?.MateriaPrima ?? r?.MP ?? r?.["Materia Prima"] ?? r?.["Materia prima"] ?? "";
+
+  const getCostoMerma = (r) => N(
     r?.CostoMerma ?? r?.["CostoMerma"] ?? r?.["Costo Merma"] ?? r?.["Costo de merma"] ?? r?.["Costo total merma"] ?? 0
-    );
-    const getCostoUnit  = (r)=> N(
+  );
+  const getCostoUnit = (r) => N(
     r?.CostoUnitario ?? r?.["CostoUnitario"] ?? r?.["Costo Unitario"] ?? r?.["Costo unitario"] ??
     r?.["Costo kg"] ?? r?.["Precio unitario"] ?? r?.["Costo x kg"] ?? r?.["Costo x pieza"] ?? 0
-    );
+  );
 
-
-
-  // columnas tolerantes
-  const getLinea = (r) => r?.linea ?? r?.Linea ?? r?.LINEA ?? r?.["Línea"] ?? r?.["Linea"] ?? r?.["Linea Full"] ?? r?.["Línea Full"];
-  const getTeo   = (r) => N(r?.["Cantidad Teórica"] ?? r?.CantidadTeorica ?? r?.CTeorica ?? r?.CTEO ?? r?.teorica);
-  const getReal  = (r) => N(r?.["Cantidad Real"] ?? r?.CantidadReal ?? r?.CReal ?? r?.CREAL ?? r?.real);
-  
-  
-    // Ya NO usamos el campo "Merma" del dataset aquí.
-    // La merma se calcula siempre desde Teórica/Real.
-    const getMermaField = () => 0; // placeholder para no romper referencias antiguas
-
-    // En esta página calcularemos la merma con |Real - Teórica|,
-    // así funciona tanto para Etiquetas (Real > Teórica) como para otros casos.
-    const calcMermaFrom = (teo, real) => (real - teo); // permite merma negativa
-
-  
-  const getCat = (r) => r?.CategoriaMP ?? r?.Categoria ?? r?.["Categoría MP"] ?? r?.cat ?? "Otros";
-
-  // ---------- reglas especiales ----------
+  // ============ Reglas especiales ============
   const LINE_BLACKLIST = [/co2\b/, /multiempaq/, /maquila.*preforma/, /maquila.*bevi/];
   const isExcludedLine = (name) => LINE_BLACKLIST.some(re => re.test(normalize(name)));
 
@@ -69,9 +66,11 @@
   const CAT_COMBINED_LABEL = "Preforma y Resina PET";
   const isPreformaPet = (c) => { const n = normalize(c); return n.includes("preforma") && n.includes("pet"); };
   const isResinaPet   = (c) => { const n = normalize(c); return n.includes("resina")   && n.includes("pet"); };
-  const RESINA_TO_PIEZAS =1000/18.5; // kg → piezas
 
-  // ---------- datos base: SIEMPRE todas las filas ----------
+  // Conversión kg → piezas cuando se selecciona la categoría combinada y la fila es Resina.
+  const RESINA_TO_PIEZAS = 1000 / 18.5;
+
+  // ============ Dataset base ============
   function seedRows() {
     if (window.VMPS?.getAllRows) return window.VMPS.getAllRows();
     if (Array.isArray(window.VMPS?.rows)) return window.VMPS.rows;
@@ -79,13 +78,19 @@
   }
   let BASE = seedRows();
 
-  // ---------- UI ----------
+  // ============ UI ============
   host.innerHTML = `
     <div class="grid grid--2" style="gap:16px;">
       <div>
         <label class="muted">Materia Prima (catálogo)</label>
         <select id="lvslCat" class="btn" style="width:100%"></select>
+
+        <div style="margin-top:8px">
+          <label class="muted">Subcategoría (opcional)</label>
+          <select id="lvslSub" class="btn" style="width:100%"></select>
+        </div>
       </div>
+
       <div>
         <label class="muted">Líneas</label>
         <div id="lvslChips" class="chips" style="flex-wrap:wrap;gap:8px;"></div>
@@ -112,6 +117,21 @@
       <div class="kpi"><div class="kpi__label">% Merma = Merma/Real</div><div class="kpi__value" id="kpPct">0.00 %</div></div>
     </div>
 
+    <!-- NUEVO: % Merma por tiempo -->
+    <section class="panel" id="rendPanel" style="margin-top:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <h3 class="panel-title" style="margin:0;">% Merma por tiempo</h3>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button id="btnRGroup" class="btn">Conjunto</button>
+          <button id="btnRSplit" class="btn btn--ghost">Separado por Lineas</button>
+        </div>
+      </div>
+      <div style="height:320px"><canvas id="rendChart"></canvas></div>
+      <div class="muted" style="margin-top:6px;font-size:12px">
+         %Merma (filtrado por categoría, subcategoría y líneas).
+      </div>
+    </section>
+
     <section class="panel" style="margin-top:16px">
       <h3 class="panel-title">Pareto — Merma por línea (unidades)</h3>
       <div style="height:360px"><canvas id="pUnits"></canvas></div>
@@ -121,25 +141,25 @@
       <h3 class="panel-title">Pareto — % Merma por línea</h3>
       <div style="height:360px"><canvas id="pPct"></canvas></div>
     </section>
-    <section class="panel" id="critPanel">
-  <h3 class="panel-title">Línea crítica — impacto financiero</h3>
-  <div id="critSummary" class="crit-sum">—</div>
-  <div style="overflow-x:auto;margin-top:8px">
-    <table class="table" id="critTable">
-      <thead>
-        <tr>
-          <th>Línea</th>
-          <th>Costo de merma (MXN)</th>
-          <th>Merma (unidades)</th>
-          <th>% Merma</th>
-          <th>% del Real Producido</th>
-        </tr>
-      </thead>
-      <tbody><tr><td colspan="5" class="muted">Sin datos…</td></tr></tbody>
-    </table>
-  </div>
-</section>
 
+    <section class="panel" id="critPanel">
+      <h3 class="panel-title">Línea crítica — impacto financiero</h3>
+      <div id="critSummary" class="crit-sum">—</div>
+      <div style="overflow-x:auto;margin-top:8px">
+        <table class="table" id="critTable">
+          <thead>
+            <tr>
+              <th>Línea</th>
+              <th>Costo de merma (MXN)</th>
+              <th>Merma (unidades)</th>
+              <th>% Merma</th>
+              <th>% del Real Producido</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="5" class="muted">Sin datos…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
   `;
 
   // estilos mínimos
@@ -157,11 +177,13 @@
     document.head.appendChild(s);
   })();
 
-  // refs filtros
+  // ============ Refs ============
   const selCat = document.getElementById("lvslCat");
-  const chipsWrap = document.getElementById("lvslChips");
+  const selSub = document.getElementById("lvslSub");
+  selSub.innerHTML = `<option value="__ALL__">Todas las materias primas</option>`;
+  selSub.value = "__ALL__";
 
-  // refs periodo
+  const chipsWrap = document.getElementById("lvslChips");
   const monthButtons = document.getElementById("lvslMonthButtons");
   const customRange  = document.getElementById("lvslCustomRange");
   const dateStart    = document.getElementById("lvslDateStart");
@@ -169,15 +191,13 @@
   const btnApply     = document.getElementById("lvslApplyRange");
   const btnClear     = document.getElementById("lvslClearRange");
 
-  // estado líneas
+  // Estado líneas & periodo
   let picked = new Set();
   let chipAllBtn = null;
-  let lineButtons = []; // [{name, btn}]
-
-  // estado periodo (igual que consumo)
+  let lineButtons = [];
   const period = { mode: "month", monthKey: "", dateStart: "", dateEnd: "" };
 
-  // --------- categorías ----------
+  // ============ Categorías y subcategorías ============
   function buildCategories() {
     const catsRaw = uniq(BASE.map(getCat).filter(Boolean));
     const hasPre = catsRaw.some(isPreformaPet);
@@ -189,18 +209,60 @@
 
     if (hasPre || hasRes) cats.unshift(CAT_COMBINED_LABEL);
 
-    selCat.innerHTML = `<option value="__ALL__">Todas</option>` + 
-      cats.map(c => c === CAT_COMBINED_LABEL
+    // sin opción "Todas"
+    selCat.innerHTML = cats
+      .map(c => c === CAT_COMBINED_LABEL
         ? `<option value="${CAT_COMBINED_VAL}">${CAT_COMBINED_LABEL}</option>`
         : `<option>${c}</option>`).join("");
 
-    const savedCat = sessionStorage.getItem("LVSL_CAT");
-    if (savedCat && (savedCat==="__ALL__" || savedCat===CAT_COMBINED_VAL || cats.includes(savedCat))) {
-      selCat.value = savedCat;
+    const saved = sessionStorage.getItem("LVSL_CAT");
+    if (saved && [...selCat.options].some(o=>o.value===saved || o.textContent===saved)) {
+      selCat.value = saved;
+    } else {
+      selCat.value = cats.includes(CAT_COMBINED_LABEL) ? CAT_COMBINED_VAL : cats[0] || "";
+      sessionStorage.setItem("LVSL_CAT", selCat.value);
     }
   }
 
-  // --------- chips (FIX: onclick de “Todas” FUERA del forEach y btn.onclick restaurado) ----------
+  function buildSubcats(){
+    if (!selSub) return;
+
+    if (!Array.isArray(BASE) || BASE.length === 0) {
+      selSub.innerHTML = `<option value="__ALL__">Todas las materias primas</option>`;
+      selSub.value = "__ALL__";
+      return;
+    }
+
+    const selVal = selCat.value;
+    const inCat = (r) => {
+      const c = getCat(r);
+      if (selVal === CAT_COMBINED_VAL) return isPreformaPet(c) || isResinaPet(c);
+      return c === selVal;
+    };
+
+    const mps = [...new Set(
+      BASE.filter(inCat).map(getMP).filter(Boolean).map(s=>s.trim())
+    )].sort((a,b)=>a.localeCompare(b,"es"));
+
+    const saved = sessionStorage.getItem("LVSL_SUB");
+    selSub.innerHTML =
+      `<option value="__ALL__">Todas las materias primas</option>` +
+      mps.map(mp => `<option>${mp}</option>`).join("");
+
+    selSub.value = (saved && (saved==="__ALL__" || mps.includes(saved))) ? saved : "__ALL__";
+  }
+
+  selCat.addEventListener("change", ()=>{
+    sessionStorage.setItem("LVSL_CAT", selCat.value);
+    buildSubcats();
+    render();
+  });
+  selSub.addEventListener("change", ()=>{
+    sessionStorage.setItem("LVSL_SUB", selSub.value);
+    render();
+  });
+
+  // ============ Chips de líneas ============
   function buildLineChips() {
     chipsWrap.innerHTML = "";
     lineButtons = [];
@@ -225,21 +287,19 @@
       if (active) picked.add(L);
       btn.className = "chip" + (active ? " chip--on" : "");
       btn.textContent = L;
-      btn.onclick = () => { toggleLine(L, btn, allLines.length); }; // <- RESTAURADO
+      btn.onclick = () => { toggleLine(L, btn, allLines.length); };
       chipsWrap.appendChild(btn);
       lineButtons.push({ name: L, btn });
     });
 
-    // toggle de “Todas” (FUERA del forEach)
+    // toggle “Todas”
     chipAllBtn.onclick = () => {
       const total = allLines.length;
       if (picked.size === total) {
-        // dejar NINGUNA
         picked.clear();
         for (const {btn} of lineButtons) btn.classList.remove("chip--on");
         chipAllBtn.classList.remove("chip--on");
       } else {
-        // seleccionar TODO
         picked = new Set(allLines);
         for (const {btn} of lineButtons) btn.classList.add("chip--on");
         chipAllBtn.classList.add("chip--on");
@@ -248,14 +308,12 @@
       render();
     };
 
-    // primera vez (sin clave) → todas
     if (savedRaw === null) {
       picked = new Set(allLines);
       for (const {btn} of lineButtons) btn.classList.add("chip--on");
     }
     updateChipAllState(allLines.length);
   }
-
   function toggleLine(L, btn, total) {
     if (picked.has(L)) picked.delete(L); else picked.add(L);
     btn.classList.toggle("chip--on");
@@ -268,9 +326,8 @@
     chipAllBtn.classList.toggle("chip--on", allOn);
   }
   function persistLines(){ sessionStorage.setItem("LVSL_LINES", JSON.stringify(Array.from(picked))); }
-  selCat.addEventListener("change", ()=>{ sessionStorage.setItem("LVSL_CAT", selCat.value); render(); });
 
-  // --------- PERIODO (clonado del flujo de consumo) ----------
+  // ============ Periodo ============
   function buildPeriodUI(rows){
     const months = [...new Set(rows.map(r => yyyymm(r.FechaISO)).filter(Boolean))].sort();
 
@@ -286,23 +343,21 @@
     };
     makeBtn("Todas las fechas","ALL");
     makeBtn("Mes actual","NOW");
-
     months.forEach(mk=>{
       const [y,m] = mk.split("-");
       const MESES = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
       makeBtn(`${MESES[parseInt(m,10)-1]||mk} ${y}`, mk);
     });
-
     makeBtn("Personalizado","CUSTOM", true);
     monthButtons.replaceChildren(frag);
 
-    // límites para inputs
+    // límites inputs
     const dates = rows.map(r=>r.FechaISO).filter(Boolean).sort();
     const minISO = dates[0] || ""; const maxISO = dates[dates.length-1] || "";
     if (dateStart) { dateStart.min = minISO; dateStart.max = maxISO; }
     if (dateEnd)   { dateEnd.min   = minISO; dateEnd.max   = maxISO; }
 
-    // default (igual que consumo): seleccionar mes actual si existe, si no el último; si no, “Todas”
+    // default: mes actual si existe, si no el último, si no “Todas”
     const now = new Date();
     const mkNow = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
     period.mode = "month";
@@ -328,7 +383,6 @@
         return;
       }
 
-      // month mode
       period.mode = "month";
       customRange.style.display = "none";
       period.dateStart = period.dateEnd = "";
@@ -343,7 +397,7 @@
       render();
     };
 
-    // rango personalizado
+    // rango
     btnApply.onclick = ()=>{
       const ds = dateStart.value || "";
       const de = dateEnd.value   || "";
@@ -369,19 +423,18 @@
     };
   }
 
-  // --------- init filtros ----------
-  function populateFilters() { buildCategories(); buildLineChips(); }
+  // init filtros
+  function populateFilters(){ buildCategories(); buildSubcats(); buildLineChips(); }
   populateFilters();
   buildPeriodUI(BASE);
 
-  // ---------- agregación ----------
+  // ============ Filtrado por controles ============
   function filteredRows() {
     const sel = selCat.value;
-    // líneas
+    const sub = selSub?.value || "__ALL__";
     if (picked.size === 0) return [];
     const lines = picked;
 
-    // fecha
     const applyDate = (r) => {
       if (period.mode === "month") {
         if (!period.monthKey) return true;
@@ -394,128 +447,279 @@
         return true;
       }
     };
+    const eq = (a,b)=> normalize(a) === normalize(b);
 
     return BASE.filter(r => {
       const L = getLinea(r);
       if (!L || !lines.has(L) || isExcludedLine(L)) return false;
       if (!applyDate(r)) return false;
 
-      if (sel === "__ALL__") return true;
+      // categoría
       const c = getCat(r);
-      if (sel === CAT_COMBINED_VAL) return isPreformaPet(c) || isResinaPet(c);
-      return c === sel;
+      if (sel === CAT_COMBINED_VAL) {
+        if (!(isPreformaPet(c) || isResinaPet(c))) return false;
+      } else if (c !== sel) return false;
+
+      // subcategoría
+      if (sub !== "__ALL__") {
+        const mp = getMP(r);
+        if (!mp || !eq(mp, sub)) return false;
+      }
+      return true;
     });
   }
 
+  // ============ Métricas por fila, agregados ============
   function metricsForRow(r, selCatVal) {
-        let teo = getTeo(r);
-        let real = getReal(r);
-        // Conversión kg→piezas SOLO para Resina PET cuando usamos la categoría combinada
-        if (selCatVal === CAT_COMBINED_VAL && isResinaPet(getCat(r))) {
-            const k = RESINA_TO_PIEZAS; teo *= k; real *= k;
-        }
-        return { teo, real };
+    let teo = getTeo(r);
+    let real = getReal(r);
+    // conversión kg→piezas para Resina PET cuando usamos la categoría combinada
+    if (selCatVal === CAT_COMBINED_VAL && isResinaPet(getCat(r))) {
+      const k = RESINA_TO_PIEZAS; teo *= k; real *= k;
     }
+    return { teo, real };
+  }
 
-    function aggregateByLine(rows) {
-        const map = new Map();
-        const selVal = selCat.value;
-
-        for (const r of rows){
-            const L = getLinea(r);
-            if (!L) continue;
-
-            const m = metricsForRow(r, selVal); // {teo, real}
-            const o = map.get(L) || { teo:0, real:0 };
-            o.teo  += m.teo;
-            o.real += m.real;
-            map.set(L, o);
-        }
-
-        // Ahora calculamos MERMA por línea como |ΣReal − ΣTeo|
-        for (const o of map.values()){
-            o.merma = calcMermaFrom(o.teo, o.real);
-            o.pct   = o.real > 0 ? (o.merma / o.real) * 100 : 0;
-        }
-        return map;
-    }
-
-// Agrega por línea: real, merma (en unidades ya normalizadas) y costo de merma (MXN)
-    function aggregateFinance(rows){
+  function aggregateByLine(rows) {
     const map = new Map();
     const selVal = selCat.value;
 
     for (const r of rows){
-        const L = getLinea(r); if (!L) continue;
+      const L = getLinea(r);
+      if (!L) continue;
 
-        // mismas reglas de unidades que el resto de la página
-        const m = metricsForRow(r, selVal);                 // {teo, real} (ya convierte Resina→piezas si procede)
-        const mermaU = calcMermaFrom(m.teo, m.real);        // |ΣReal − ΣTeo| en unidades “vista”
-        // costo: si hay unitario confiable, recalculamos con nuestra merma; si no, usamos CostoMerma del dataset
-        const cu  = getCostoUnit(r);
-        let cost  = isFinite(cu) && cu > 0 ? (mermaU * cu) : getCostoMerma(r);
+      const m = metricsForRow(r, selVal);
+      const o = map.get(L) || { teo:0, real:0 };
+      o.teo  += m.teo;
+      o.real += m.real;
+      map.set(L, o);
+    }
 
-        const o = map.get(L) || { teo:0, real:0, cost:0 };
-        o.teo  += m.teo;
-        o.real += m.real;
-        // el costo sí se suma por registro:
-        o.cost += (isFinite(cu)&&cu>0 ? (mermaU*cu) : getCostoMerma(r));
-
-        map.set(L, o);
+    // merma = Real − Teórica (puede ser negativa según MP)
+    for (const o of map.values()){
+      o.merma = (o.real - o.teo);
+      o.pct   = o.real > 0 ? (o.merma / o.real) * 100 : 0;
     }
     return map;
+  }
+
+  function aggregateFinance(rows){
+    const map = new Map();
+    const selVal = selCat.value;
+
+    for (const r of rows){
+      const L = getLinea(r); if (!L) continue;
+      const m = metricsForRow(r, selVal);
+      const mermaU = (m.real - m.teo);
+      const cu = getCostoUnit(r);
+      const cost = isFinite(cu) && cu > 0 ? (mermaU * cu) : getCostoMerma(r);
+      const getOPE = (r) =>
+        r?.OPE ?? r?.Op ?? r?.OP ?? r?.["No OPE"] ?? r?.["# OPE"] ??
+        r?.["Orden Producción"] ?? r?.["Orden de Producción"] ?? r?.["Orden"] ?? "";
+
+
+      const o = map.get(L) || { teo:0, real:0, cost:0 };
+      o.teo  += m.teo;
+      o.real += m.real;
+      o.cost += cost;
+      map.set(L, o);
     }
+    return map;
+  }
 
-    function renderCritical(finMap){
-    const tbody = document.querySelector("#critTable tbody");
-    const summary = document.getElementById("critSummary");
+  // ============ Rendimiento (Conjunto / Separado) ============
+  let charts = { rend:null, units:null, pct:null };
 
-    const arr = [...finMap.entries()].map(([L,o])=>({ linea:L, ...o }));
-    if (!arr.length){
-        tbody.innerHTML = `<tr><td colspan="5" class="muted">Sin datos…</td></tr>`;
-        summary.textContent = "—";
-        return;
-    }
+  let rendMode = sessionStorage.getItem("LVSL_REND_MODE") || "group";
+  const btnRGroup = document.getElementById("btnRGroup");
+  const btnRSplit = document.getElementById("btnRSplit");
+  function setRendMode(m){
+    rendMode = m;
+    sessionStorage.setItem("LVSL_REND_MODE", m);
+    btnRGroup.classList.toggle("btn--ghost", m !== "group");
+    btnRSplit.classList.toggle("btn--ghost", m !== "split");
+    renderRendChart();
+  }
+  btnRGroup.onclick = ()=> setRendMode("group");
+  btnRSplit.onclick = ()=> setRendMode("split");
+  setRendMode(rendMode);
 
-    const totalReal  = arr.reduce((s,o)=> s+o.real ,0);
-    const totalCost  = arr.reduce((s,o)=> s+o.cost ,0);
+  const PALETTE = ["#1f77b4","#d62728","#2ca02c","#9467bd","#17becf","#ff7f0e","#8c564b","#e377c2","#bcbd22","#7f7f7f"];
+  function colorForLine(L, idx){
+    const n = normalize(L);
+    if (/^linea\s*8\b/.test(n) || /^l[ií]nea\s*8\b/.test(n)) return "#1f77b4"; // azul (agua)
+    if (/^linea\s*7\b/.test(n) || /^l[ií]nea\s*7\b/.test(n)) return "#d62728"; // rojo (coca)
+    if (/^linea\s*4\b/.test(n) || /^l[ií]nea\s*4\b/.test(n)) return "#2ca02c"; // verde (retornable)
+    if (/^linea\s*1\b/.test(n) || /^l[ií]nea\s*1\b/.test(n)) return "#9467bd"; // naranja (retornable)
+    if (/^linea\s*2\b/.test(n) || /^l[ií]nea\s*2\b/.test(n)) return "#17becf"; // azul cielo 
+    if (/^linea\s*3\b/.test(n) || /^l[ií]nea\s*3\b/.test(n)) return "#bcbd22"; // amarillo (valle)
+    if (/^linea\s*6\b/.test(n) || /^l[ií]nea\s*6\b/.test(n)) return "#7f7f7f"; // vidrio (valle)
+    if (/^linea\s*10\b/.test(n) || /^l[ií]nea\s*10\b/.test(n)) return "#e377c2"; // vidrio (valle)
+    return PALETTE[idx % PALETTE.length];
+  }
 
-    // métricas derivadas
-    for (const o of arr){
-        o.merma    = (o.real - o.teo);                 // antes: Math.abs(...)
-        o.pctMerma = o.real > 0 ? (o.merma/o.real*100) : 0;
+  function spanDays(aISO, bISO){
+    return Math.max(0, Math.round((new Date(bISO) - new Date(aISO)) / 86400000));
+  }
 
-        o.shareR   = totalReal>0 ? (o.real/totalReal*100) : 0;
-    }
+  function timeBucketer(rows){
+    const dates = rows.map(r=>r.FechaISO).filter(Boolean).sort();
+    if (!dates.length) return { scale:"day", keyOf:()=>"", keys:[] };
+    const scale = spanDays(dates[0], dates[dates.length-1]) > 93 ? "month" : "day";
+    const keyOf = scale === "month" ? (r)=> yyyymm(r.FechaISO) : (r)=> (r.FechaISO || "");
+    const keys = [...new Set(rows.map(keyOf).filter(Boolean))].sort();
+    return { scale, keyOf, keys };
+  }
 
-    // ordenar por mayor impacto $
-    arr.sort((a,b)=> b.cost - a.cost);
+  // 👇 reemplaza TODA tu función buildRendDatasets por esta
+    function buildRendDatasets(rows){
+      const { keyOf, keys } = timeBucketer(rows);
+      const selVal = selCat.value;
 
-    // resumen “línea crítica”
-    const top = arr[0];
-    summary.innerHTML = `
-        <span>La línea más crítica es <b>${top.linea}</b>.</span>
-        <span>Impacto estimado: <b>${fmtMXN(top.cost)}</b></span>
-        <span>Merma: <b>${fmt(top.merma,2)}</b> u. (${fmt(top.pctMerma,2)}%)</span>
-        <span>Participa el <b>${fmt(top.shareR,1)}%</b> del Total Real Producido.</span>
-    `;
+      // helper: arma puntos (valor + opes) para un filtro de filas
+      const pointsFor = (rowFilter) => keys.map(k => {
+        let teo = 0, real = 0;
+        const seen = new Set();
+        for (const r of rows) {
+          if (keyOf(r) !== k) continue;
+          if (rowFilter && !rowFilter(r)) continue;
+          const m = metricsForRow(r, selVal); teo += m.teo; real += m.real;
+          const op = (r.OPE ?? r.Op ?? r.OP ?? r["No OPE"] ?? r["# OPE"] ??
+                      r["Orden Producción"] ?? r["Orden de Producción"] ?? r["Orden"] ?? "");
+          if (op) seen.add(String(op));
+        }
+        // % merma (2 decimales). Si necesitas rendimiento, cambia la fórmula.
+        const pct = real > 0 ? ((real - teo) / real * 100) : 0;
+        return { y: +pct.toFixed(2), opes: [...seen] };
+      });
 
-    // tabla (Top 5)
-    const top5 = arr.slice(0,5);
-    tbody.innerHTML = top5.map(o=>`
-        <tr>
-        <td>${o.linea}</td>
-        <td>${fmtMXN(o.cost)}</td>
-        <td>${fmt(o.merma,2)}</td>
-        <td>${fmt(o.pctMerma,2)}%</td>
-        <td>${fmt(o.shareR,1)}%</td>
-        </tr>
-    `).join("");
-    }
+      // MODO CONJUNTO: una sola serie
+      if (rendMode === "group"){
+        const pts = pointsFor(null);
+        const brand = getVar("--c-brand") || "#ff8a00";
+        return {
+          labels: keys,
+          datasets: [{
+            label: "% Merma (conjunto)",
+            data: pts.map(p => p.y),
+            opesList: pts.map(p => p.opes),  // <-- paralelo a data
+            spanGaps: true, tension: .25, pointRadius: 2,
+            borderColor: brand, backgroundColor: hexA(brand,.2), fill: false
+          }]
+        };
+      }
 
-  // ---------- render ----------
-  let charts = { units:null, pct:null };
+    // MODO SEPARADO: una serie por línea (máx. 10)
+    const lines = [...new Set(rows.map(getLinea).filter(Boolean))]
+      .sort((a,b)=>(""+a).localeCompare(""+b,"es"))
+      .slice(0,10);
 
+    const datasets = lines.map((L,i)=>{
+      const pts = pointsFor(r => getLinea(r) === L);
+      const col = colorForLine(L,i);
+      return {
+        label: L,
+        data: pts.map(p => p.y),
+        opesList: pts.map(p => p.opes),     // <-- paralelo a data
+        spanGaps: true, tension: .25, pointRadius: 0,
+        borderColor: col, backgroundColor: hexA(col,.2)
+      };
+    }).filter(ds => ds.data.some(v => Number.isFinite(v) && Math.abs(v) > 1e-9));
+
+    return { labels: keys, datasets };
+  }
+
+  function renderRendChart(){
+    const rows = filteredRows();
+    const ctx = document.getElementById("rendChart")?.getContext("2d");
+    if (!ctx) return;
+
+    if (charts.rend) charts.rend.destroy();
+
+    const cfg = buildRendDatasets(rows);
+
+    
+      // --- LÍNEA BASE EN 0 ---
+      const ZERO_LABEL = "0%";
+      cfg.datasets.push({
+        label: ZERO_LABEL,                 // la ocultamos del legend con filter
+        data: (cfg.labels || []).map(()=> 0),
+        type: "line",
+        borderColor: "#ff4d4d",            // rojo base
+        borderWidth: 1,
+        pointRadius: 0,
+        hitRadius: 0,
+        hoverRadius: 0,
+         borderDash: [6, 6],
+        fill: false,
+        order: 0,                          // detrás de las demás
+        clip: false
+      });
+
+
+    const tick = getVar("--c-text-dim") || "#cfd3da";
+    const grid = "rgba(255,255,255,.08)";
+
+    
+    charts.rend = new Chart(ctx, {
+      type: "line",
+      data: cfg,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { /* ... */ },
+          tooltip: {
+            filter: (ctx) => {
+              const lbl = ctx.dataset?.label || "";
+              if (lbl === "0%" || lbl === "__ZERO_BASE__") return false; // oculta línea 0
+              const v = Number(ctx.parsed?.y);
+              return Number.isFinite(v) && Math.abs(v) > 1e-9;            // oculta valores 0
+            },
+            callbacks: {
+              label: (ctx) => {
+                const name = ctx.dataset?.label ?? "";
+                const v = Number(ctx.parsed?.y);
+                const num = v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                return `${name}: ${num}%`;
+              },
+              afterBody: (items) => {
+                const it = items?.[0]; if (!it) return [];
+                const ds = it.dataset || {}; const idx = it.dataIndex;
+                const ops = (ds.opesList && ds.opesList[idx]) ? ds.opesList[idx] : [];
+                if (!ops.length) return [];
+                const MAX = 12;
+                const view = ops.slice(0, MAX);
+                const extra = ops.length > MAX ? `… (+${ops.length - MAX} más)` : null;
+                return ["OPE(s):", ...view.map(x => "• " + x), ...(extra ? [extra] : [])];
+              }
+            }
+          }
+        }
+        ,
+        scales: {
+          x: { ticks: { color: tick }, grid: { color: grid } },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              color: tick,
+              // eje Y con porcentaje (puedes dejar 0 decimales aquí si quieres)
+              callback: (v) =>
+                Number(v).toLocaleString("es-MX", {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0
+                }) + "%"
+            },
+            grid: { color: grid },
+            title: { display: true, text: "Merma (%)", color: tick }
+          }
+        }
+      }
+    });
+  }
+
+  // ============ Render principal ============
   function render(){
     const rows = filteredRows();
     const byLine = aggregateByLine(rows);
@@ -523,32 +727,27 @@
     // KPIs globales
     const tot = [...byLine.values()].reduce((acc,o)=>({teo:acc.teo+o.teo, real:acc.real+o.real, merma:acc.merma+o.merma}), {teo:0,real:0,merma:0});
     const pct = tot.real > 0 ? (tot.merma / tot.real) * 100 : 0;
-
     document.getElementById("kpTeo").textContent   = fmt(tot.teo);
     document.getElementById("kpReal").textContent  = fmt(tot.real);
     document.getElementById("kpMerma").textContent = fmt(tot.merma);
     document.getElementById("kpPct").textContent   = fmt(pct) + " %";
 
-    // colores
+    // Render rendimiento
+    renderRendChart();
+
+    // Colores
     const brand = getVar("--c-brand") || "#ff8a00";
     const lineColor = getVar("--c-brand-300") || "#FFA366";
     const grid = "rgba(255,255,255,.08)";
     const tick = getVar("--c-text-dim") || "#cfd3da";
 
-    // Pareto unidades
- 
-   // === Pareto UNIDADES (idéntico enfoque a graficas.js) ===
+    // Pareto UNIDADES
     const e1 = [...byLine.entries()].sort((a,b)=> b[1].merma - a[1].merma);
     const L1 = e1.map(([L])=>L);
     const V1 = e1.map(([,o])=> o.merma);
-
-    // suma de barras (altura del eje izquierdo) y acumulado relativo
     const T1 = V1.reduce((s,v)=> s+v, 0);
     let acc1 = 0;
-    const C1 = V1.map(v => {
-    acc1 += v;
-    return T1>0 ? +(acc1 / T1 * 100).toFixed(2) : 0;  // acumulado relativo a Σ barras
-    });
+    const C1 = V1.map(v => { acc1 += v; return T1>0 ? +(acc1 / T1 * 100).toFixed(2) : 0; });
     const yMax1 = T1 > 0 ? T1 : 1;
 
     const ctx1 = document.getElementById("pUnits").getContext("2d");
@@ -556,43 +755,38 @@
     const grad1 = ctx1.createLinearGradient(0,0,0,300);
     grad1.addColorStop(0, brand); grad1.addColorStop(1, hexA(brand,.25));
     charts.units = new Chart(ctx1, {
-    type: "bar",
-    data: {
+      type: "bar",
+      data: {
         labels: L1,
         datasets: [
-        { type:"bar",  order:2, label:"Merma (unidades)", data:V1,
+          { type:"bar",  order:2, label:"Merma (unidades)", data:V1,
             backgroundColor:grad1, borderColor:brand, borderWidth:1.2, borderRadius:8, yAxisID:"y" },
-        { type:"line", order:1, label:"Acumulado (%)", data:C1,
+          { type:"line", order:1, label:"Acumulado (%)", data:C1,
             borderColor:lineColor, backgroundColor:lineColor, tension:.25, pointRadius:2, yAxisID:"y1" }
         ]
-    },
-    options: {
+      },
+      options: {
         responsive:true, maintainAspectRatio:false, interaction:{ mode:"index", intersect:false },
         plugins:{ legend:{ labels:{ color: tick, usePointStyle:true } } },
         scales:{
-        x:{ ticks:{ color:tick }, grid:{ color:grid } },
-        y:{ beginAtZero:true, min:0, max:yMax1,
-            ticks:{ color:tick, callback:v=>Number(v).toLocaleString("es-MX") },
-            grid:{ color:grid }, title:{ display:true, text:"Unidades", color:tick } },
-        y1:{ beginAtZero:true, min:0, max:100,
-            ticks:{ color:tick, callback:v=>v+"%" }, grid:{ drawOnChartArea:false },
-            position:"right", title:{ display:true, text:"% acumulado", color:tick } }
+          x:{ ticks:{ color:tick }, grid:{ color:grid } },
+          y:{ beginAtZero:true, min:0, max:yMax1,
+              ticks:{ color:tick, callback:v=>Number(v).toLocaleString("es-MX") },
+              grid:{ color:grid }, title:{ display:true, text:"Unidades", color:tick } },
+          y1:{ beginAtZero:true, min:0, max:100,
+              ticks:{ color:tick, callback:v=>v+"%" }, grid:{ drawOnChartArea:false },
+              position:"right", title:{ display:true, text:"% acumulado", color:tick } }
         }
-    }
+      }
     });
 
-    // === Pareto % MERMA (idéntico enfoque a graficas.js) ===
+    // Pareto % MERMA
     const e2 = [...byLine.entries()].sort((a,b)=> b[1].pct - a[1].pct);
     const L2 = e2.map(([L])=>L);
-    const V2 = e2.map(([,o])=> o.pct);   // barras en % (merma/real*100)
-
-    // suma de barras (altura del eje izquierdo) y acumulado relativo
+    const V2 = e2.map(([,o])=> o.pct);
     const S2 = V2.reduce((s,v)=> s+v, 0);
     let acc2 = 0;
-    const A2 = V2.map(v => {
-    acc2 += v;
-    return S2>0 ? +(acc2 / S2 * 100).toFixed(2) : 0; // acumulado relativo a Σ barras
-    });
+    const A2 = V2.map(v => { acc2 += v; return S2>0 ? +(acc2 / S2 * 100).toFixed(2) : 0; });
     const yMax2 = S2 > 0 ? S2 : 1;
 
     const ctx2 = document.getElementById("pPct").getContext("2d");
@@ -600,145 +794,88 @@
     const grad2 = ctx2.createLinearGradient(0,0,0,300);
     grad2.addColorStop(0, brand); grad2.addColorStop(1, hexA(brand,.25));
     charts.pct = new Chart(ctx2, {
-    type: "bar",
-    data: {
+      type: "bar",
+      data: {
         labels: L2,
         datasets: [
-        { type:"bar",  order:2, label:"% Merma (merma/real)", data:V2,
+          { type:"bar",  order:2, label:"% Merma (merma/real)", data:V2,
             backgroundColor:grad2, borderColor:brand, borderWidth:1.2, borderRadius:8, yAxisID:"y" },
-        { type:"line", order:1, label:"Acumulado (%) relativo a Σ barras", data:A2,
+          { type:"line", order:1, label:"Acumulado (%) relativo a Σ barras", data:A2,
             borderColor:lineColor, backgroundColor:lineColor, tension:.25, pointRadius:2, yAxisID:"y1" }
         ]
-    },
-    options: {
+      },
+      options: {
         responsive:true, maintainAspectRatio:false, interaction:{ mode:"index", intersect:false },
         plugins:{ legend:{ labels:{ color: tick, usePointStyle:true } },
-        tooltip:{ callbacks:{ label:(ctx)=> {
+          tooltip:{ callbacks:{ label:(ctx)=> {
             const v = +ctx.parsed.y;
             return `${ctx.dataset.label}: ${Number.isFinite(v) ? v.toFixed(2) : v}%`;
-        }}} },
+          }}} },
         scales:{
-        x:{ ticks:{ color:tick }, grid:{ color:grid } },
-        // Eje izquierdo = suma de % de las barras (no 100)
-        y:{ min:0, max:yMax2,
-            ticks:{ color:tick, callback: (v)=> `${(+v).toFixed(2)}%`}, grid:{ color:grid },
-            title:{ display:true, text:"Suma de % merma (barras)", color:tick } },
-        // Eje derecho = 0–100% (acumulado relativo)
-        y1:{ min:0, max:100, position:"right",
-            ticks:{ color:tick, callback: (v)=> `${(+v).toFixed(2)}%`}, grid:{ drawOnChartArea:false },
-            title:{ display:true, text:"% acumulado relativo", color:tick } }
+          x:{ ticks:{ color:tick }, grid:{ color:grid } },
+          y:{ min:0, max:yMax2,
+              ticks:{ color:tick, callback: (v)=> `${(+v).toFixed(2)}%`}, grid:{ color:grid },
+              title:{ display:true, text:"Suma de % merma (barras)", color:tick } },
+          y1:{ min:0, max:100, position:"right",
+              ticks:{ color:tick, callback: (v)=> `${(+v).toFixed(2)}%`}, grid:{ drawOnChartArea:false },
+              title:{ display:true, text:"% acumulado relativo", color:tick } }
         }
-    }
+      }
     });
 
-    // --- Línea crítica (impacto financiero)
-    const fin = aggregateFinance(rows);
-    
-    renderCritical(fin);
+    // Línea crítica ($)
+    renderCritical(aggregateFinance(rows));
+  }
 
+  function renderCritical(finMap){
+    const tbody = document.querySelector("#critTable tbody");
+    const summary = document.getElementById("critSummary");
 
+    const arr = [...finMap.entries()].map(([L,o])=>({ linea:L, ...o }));
+    if (!arr.length){
+      tbody.innerHTML = `<tr><td colspan="5" class="muted">Sin datos…</td></tr>`;
+      summary.textContent = "—";
+      return;
+    }
 
+    const totalReal  = arr.reduce((s,o)=> s+o.real ,0);
+    const totalCost  = arr.reduce((s,o)=> s+o.cost ,0); // por si se usa después
 
+    for (const o of arr){
+      o.merma    = (o.real - o.teo);
+      o.pctMerma = o.real > 0 ? (o.merma/o.real*100) : 0;
+      o.shareR   = totalReal>0 ? (o.real/totalReal*100) : 0;
+    }
 
+    arr.sort((a,b)=> b.cost - a.cost);
+
+    const top = arr[0];
+    summary.innerHTML = `
+      <span>La línea más crítica es <b>${top.linea}</b>.</span>
+      <span>Impacto estimado: <b>${fmtMXN(top.cost)}</b></span>
+      <span>Merma: <b>${fmt(top.merma,2)}</b> u. (${fmt(top.pctMerma,2)}%)</span>
+      <span>Participa el <b>${fmt(top.shareR,1)}%</b> del Total Real Producido.</span>
+    `;
+
+    const top5 = arr.slice(0,5);
+    tbody.innerHTML = top5.map(o=>`
+      <tr>
+        <td>${o.linea}</td>
+        <td>${fmtMXN(o.cost)}</td>
+        <td>${fmt(o.merma,2)}</td>
+        <td>${fmt(o.pctMerma,2)}%</td>
+        <td>${fmt(o.shareR,1)}%</td>
+      </tr>`).join("");
   }
 
   // primer render
   render();
 
-  // cuando cambie el dataset global: siempre releemos TODO, reconstruimos meses/chips
+  // cuando cambie el dataset base
   window.addEventListener("vmps:update", ()=>{
     BASE = seedRows();
     populateFilters();
     buildPeriodUI(BASE);
     render();
   });
-
-  function populateFilters(){ buildCategories(); buildLineChips(); }
 })();
-
-// --- EXPORT HELPERS (PNG / CSV) ---
-function __exportCanvasPNG(canvas, filenameBase = "grafica") {
-  if (!canvas) return;
-  const bg = getComputedStyle(document.body).getPropertyValue("background-color") || "#111";
-  const tmp = document.createElement("canvas");
-  tmp.width  = canvas.width;
-  tmp.height = canvas.height;
-  const ctx = tmp.getContext("2d");
-  ctx.fillStyle = bg || "#111";
-  ctx.fillRect(0, 0, tmp.width, tmp.height);
-  ctx.drawImage(canvas, 0, 0);
-  const a = document.createElement("a");
-  a.download = `${filenameBase}.png`;
-  a.href = tmp.toDataURL("image/png", 1.0);
-  a.click();
-}
-
-function __exportArrayToCSV(headers = [], rows = [], filenameBase = "datos") {
-  const esc = (v) => {
-    const s = (v ?? "").toString();
-    return /[",\n;]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
-  };
-  const head = headers.map(esc).join(",");
-  const body = rows.map(r => r.map(esc).join(",")).join("\n");
-  const csv = head + "\n" + body;
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${filenameBase}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-// Añade botones a un <section class="panel"> (encabezado del panel)
-function __ensurePanelActions(panelId) {
-  const panel = document.getElementById(panelId);
-  if (!panel) return null;
-
-  let head = panel.querySelector(".panel__head");
-  if (!head) head = panel.querySelector("header") || panel;
-
-  let box = panel.querySelector(".panel__actions");
-  if (!box) {
-    box = document.createElement("div");
-    box.className = "panel__actions";
-    box.style.display = "flex";
-    box.style.gap = "8px";
-    box.style.marginLeft = "auto";
-    // intenta colocarlo al lado del meta si existe
-    const meta = head.querySelector(".panel__meta");
-    (meta?.parentNode || head).appendChild(box);
-    if (!meta) head.style.display = "flex";
-  }
-  return box;
-}
-
-function __addExportButtons(panelId, { onPNG, onCSV, labelCSV = "CSV", labelPNG = "PNG" }) {
-  const box = __ensurePanelActions(panelId);
-  if (!box) return;
-
-  // Evita duplicar
-  const mark = `data-actions-for-${panelId}`;
-  if (box.getAttribute(mark) === "1") return;
-  box.setAttribute(mark, "1");
-
-  const mkBtn = (txt) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "btn btn--ghost";
-    b.textContent = txt;
-    b.style.padding = "6px 10px";
-    b.style.borderRadius = "12px";
-    return b;
-  };
-
-  if (onPNG) {
-    const bPng = mkBtn(labelPNG);
-    bPng.onclick = onPNG;
-    box.appendChild(bPng);
-  }
-  if (onCSV) {
-    const bCsv = mkBtn(labelCSV);
-    bCsv.onclick = onCSV;
-    box.appendChild(bCsv);
-  }
-}
